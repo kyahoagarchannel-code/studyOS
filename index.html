@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CA StudyOS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#6366f1">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="StudyOS">
 <style>
 :root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mut:#667085;--bd:#e4e7ee;--ac:#4f46e5;--ac2:#eef0ff;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
 [data-theme=dark]{--bg:#0f1220;--card:#181c2e;--tx:#eceefb;--mut:#9aa3c0;--bd:#2a3050;--ac:#8b86ff;--ac2:#232850;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
@@ -1317,6 +1324,8 @@ initCloud();
 window.__so={cloud:cloud,SYL:SYL,S:function(){return S;},analyse:analyse,activeInfo:activeInfo,planInfo:planInfo,newProfile:newProfile,todayPlan:todayPlan,roadmap:roadmap,makeRevs:makeRevs,render:render,ui:ui,aIdx:aIdx,aLabel:aLabel,cur:cur,save:save};
 render();
 })();
+
+try{if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}catch(e){}
 </script>
 </body>
 </html>
