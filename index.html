@@ -168,11 +168,151 @@ function expandStd(nm){return SUB[nm]?SUB[nm].map(function(u){return mkCh(nm,u);
 function grpOf(c){if(c.grp)return c.grp;var i=c.name.indexOf(' – ');return i>0?c.name.slice(0,i):'';}
 function lblOf(c){if(c.unit)return c.unit;var i=c.name.indexOf(' – ');return i>0?c.name.slice(i+3):c.name;}
 function starter(k){var o=[];(SYL[k]||[]).forEach(function(n){o=o.concat(expandStd(n));});return o;}
+
+/* ---------- ICAI calendar + syllabus version (can be updated from the cloud without re-uploading this file) ---------- */
+var CAL={version:'2026-10-25',attempts:{'Jan 2027':{
+  papers:{FD1:'2027-01-03',FD2:'2027-01-05',FD3:'2027-01-07',FD4:'2027-01-09',IN1:'2027-01-02',IN2:'2027-01-04',IN3:'2027-01-06',IN4:'2027-01-08',IN5:'2027-01-10',IN6:'2027-01-12'},
+  form:{open:'2026-11-03',last:'2026-11-16',late:'2026-11-19',fee:'Rs 600',correct:'2026-11-22'},
+  result:'First week of March 2027 (expected, exact date not announced yet)'}}};
+var SYLVER='2026-10-25',SYLREM={},SYLINFO='';
+var RCK='ca_studyos_remote';
+function applyRemote(r){
+  if(!r)return;
+  if(r.calendar&&r.calendar.attempts){CAL.attempts=Object.assign({},CAL.attempts,r.calendar.attempts);if(r.calendar.version)CAL.version=r.calendar.version>CAL.version?r.calendar.version:CAL.version;}
+  var y=r.syllabus;
+  if(y&&y.version&&y.version>SYLVER){
+    SYLVER=y.version;SYLINFO=y.note||'';
+    if(y.SYL)SYL=Object.assign({},SYL,y.SYL);
+    if(y.SUB)SUB=Object.assign({},SUB,y.SUB);
+    SYLREM=y.remove||{};
+  }
+}
+try{applyRemote(JSON.parse(localStorage.getItem(RCK)||'null'));}catch(e){}
+function icaiStart(level,groups,label){
+  var e=CAL.attempts[label];if(!e||!LEVELS[level])return null;
+  var L=LEVELS[level],ks=[];
+  (groups||[]).forEach(function(g){if(L.groups[g])ks=ks.concat(L.groups[g].p);});
+  var ds=ks.map(function(k){return e.papers[k];}).filter(Boolean).sort();
+  return ds[0]||null;
+}
+function normP(P){
+  var ch=false;
+  if(P.dateAuto===undefined){var lab0=aLabel(aIdx(parse(P.examDate)));P.dateAuto=(P.examDate===iso(aDate(aIdx(parse(P.examDate)))))||(P.examDate===icaiStart(P.level,P.groups,lab0));}
+  if(P.dateAuto){
+    var d=icaiStart(P.level,P.groups,aLabel(aIdx(parse(P.examDate))));
+    if(d&&d!==P.examDate){P.examDate=d;ch=true;}
+  }
+  if(P.sylVer===undefined)P.sylVer='0';
+  if(P.sylVer<SYLVER){var df=sylDiff(P);if(df.add+df.rem+df.mig===0){P.sylVer=SYLVER;ch=true;}}
+  if(ch){P.dirty=true;save();schedSync();}
+}
+function sylDiff(P){
+  var add=0,rem=0,mig=0;
+  Object.keys(P.papers).forEach(function(k){
+    var have={};P.papers[k].ch.forEach(function(x){have[x.name.toLowerCase()]=1;});
+    (SYL[k]||[]).forEach(function(nm){
+      if(SUB[nm]){if(have[nm.toLowerCase()])mig++;SUB[nm].forEach(function(u){if(!have[(nm+' › '+u).toLowerCase()])add++;});}
+      else if(!have[nm.toLowerCase()])add++;
+    });
+    (SYLREM[k]||[]).forEach(function(nm){P.papers[k].ch.forEach(function(x){if((x.name.toLowerCase()===nm.toLowerCase()||(x.grp||'').toLowerCase()===nm.toLowerCase())&&!x.removed)rem++;});});
+  });
+  return {add:add,rem:rem,mig:mig};
+}
+function applySyl(P){
+  var added=0,removed=0,flagged=0;
+  Object.keys(P.papers).forEach(function(k){
+    var Lc=P.papers[k].ch,have={};Lc.forEach(function(x){have[x.name.toLowerCase()]=1;});
+    (SYL[k]||[]).forEach(function(nm){
+      if(SUB[nm]){
+        var idx=-1;Lc.forEach(function(x,i){if(x.name===nm)idx=i;});
+        var st='todo',old=null;
+        if(idx>=0){old=Lc[idx];st=old.status;Lc.splice(idx,1);}
+        var items=SUB[nm].filter(function(u){return !have[(nm+' › '+u).toLowerCase()];}).map(function(u){var c=mkCh(nm,u,st);if(old&&st==='done'){c.doneOn=old.doneOn;c.revs=old.revs||[];c.conf=old.conf||3;}return c;});
+        Array.prototype.splice.apply(Lc,[idx>=0?idx:Lc.length,0].concat(items));added+=items.length;
+      }else if(!have[nm.toLowerCase()]){Lc.push({id:uid(),name:nm,status:'todo',conf:3,revs:[]});added++;}
+    });
+    (SYLREM[k]||[]).forEach(function(nm){
+      for(var i=Lc.length-1;i>=0;i--){
+        var x=Lc[i];
+        if(x.name.toLowerCase()===nm.toLowerCase()||(x.grp||'').toLowerCase()===nm.toLowerCase()){
+          if(x.status==='todo'){Lc.splice(i,1);removed++;}else if(!x.removed){x.removed=true;flagged++;}
+        }
+      }
+    });
+  });
+  P.sylVer=SYLVER;
+  return {added:added,removed:removed,flagged:flagged};
+}
+async function fetchRemote(){
+  try{
+    if(!cloud.client)return;
+    var r=await cloud.client.from('app_config').select('key,value');
+    if(r.error||!r.data)return;
+    var o={};r.data.forEach(function(x){o[x.key]=x.value;});
+    if(!o.calendar&&!o.syllabus)return;
+    try{localStorage.setItem(RCK,JSON.stringify(o));}catch(e){}
+    applyRemote(o);renderKeep();
+  }catch(e){}
+}
+
+/* ---------- timer, weak chapters, streak, weekly report, reminder ---------- */
+var TMK='ca_studyos_timer';
+function tmGet(){try{return JSON.parse(localStorage.getItem(TMK)||'null');}catch(e){return null;}}
+function tmSet(v){try{if(v)localStorage.setItem(TMK,JSON.stringify(v));else localStorage.removeItem(TMK);}catch(e){}}
+function p2(n){return (n<10?'0':'')+n;}
+function tmText(t){var s=Math.max(0,Math.floor((Date.now()-t.t0)/1000));return p2(Math.floor(s/3600))+':'+p2(Math.floor(s/60)%60)+':'+p2(s%60);}
+function streakDays(P){
+  var t=today(),days={};P.sessions.forEach(function(s){days[s.date]=(days[s.date]||0)+s.min;});
+  var n=0,d=t;if(!days[iso(d)])d=addDays(d,-1);
+  while(days[iso(d)]>0){n++;d=addDays(d,-1);}
+  return n;
+}
+function weakChapters(P,study,n){
+  var out=[];
+  study.forEach(function(k){
+    P.papers[k].ch.forEach(function(ch){
+      if(ch.removed)return;
+      var sc=0,why=[];
+      if(ch.status!=='todo'&&ch.conf<=2){sc+=3-ch.conf;why.push('low confidence');}
+      var mis=0,low=0;
+      P.sessions.forEach(function(s){if(s.paper===k&&s.chapter===ch.name){if(s.mistakes)mis++;if(s.rating&&s.rating<=2)low++;}});
+      if(mis){sc+=mis;why.push(mis+' mistake note'+(mis>1?'s':''));}
+      if(low){sc+=low;why.push('understood poorly');}
+      if(sc>0)out.push({k:k,ch:ch,sc:sc,why:why.join(', ')});
+    });
+  });
+  return out.sort(function(a,b){return b.sc-a.sc;}).slice(0,n||5);
+}
+function weekReport(P){
+  var t=today(),ws=weekStart(t),pw=addDays(ws,-7);
+  var th=sessMins(P,ws,addDays(ws,6))/60,lh=sessMins(P,pw,addDays(pw,-1+7))/60;
+  var a=iso(ws),b=iso(addDays(ws,6)),chD=0;
+  var per={};
+  P.sessions.forEach(function(s){if(s.date>=a&&s.date<=b)per[s.paper]=(per[s.paper]||0)+s.min;});
+  Object.keys(P.papers).forEach(function(k){P.papers[k].ch.forEach(function(c){if(c.status==='done'&&c.doneOn&&c.doneOn>=a&&c.doneOn<=b)chD++;});});
+  var top=Object.keys(per).sort(function(x,y){return per[y]-per[x];})[0];
+  var mk=P.mocks.filter(function(m){return m.date>=a&&m.date<=b;}).length;
+  return {th:r1(th),lh:r1(lh),ch:chD,top:top?pfull(top):'',topH:top?r1(per[top]/60):0,mocks:mk,streak:streakDays(P),days:t,goal:P.weeklyGoal};
+}
+function weekText(P){
+  var w=weekReport(P);
+  return 'CA StudyOS weekly report ('+P.name+')\n'+'Study this week: '+w.th+' h (goal '+w.goal+' h, last week '+w.lh+' h)\n'+'Chapters/units finished: '+w.ch+'\n'+'Mock tests: '+w.mocks+'\n'+(w.top?'Most time on: '+w.top+' ('+w.topH+' h)\n':'')+'Study streak: '+w.streak+' day(s)';
+}
+function icsText(hhmm,url){
+  var t=new Date(),y=t.getUTCFullYear(),stamp=''+y+p2(t.getUTCMonth()+1)+p2(t.getUTCDate())+'T'+p2(t.getUTCHours())+p2(t.getUTCMinutes())+'00Z';
+  var n=new Date(),day=''+n.getFullYear()+p2(n.getMonth()+1)+p2(n.getDate()),hm=String(hhmm||'06:30').replace(':','');
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//CA StudyOS//EN','BEGIN:VEVENT','UID:studyos-daily@studyos','DTSTAMP:'+stamp,'DTSTART:'+day+'T'+hm+'00','DURATION:PT30M','RRULE:FREQ=DAILY','SUMMARY:CA StudyOS: open today\'s plan','DESCRIPTION:'+url,'URL:'+url,'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:Study time','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
+}
+function onbDate(o){
+  var gs=o.level==='foundation'?['ALL']:[o.g1?'G1':null,o.g2?'G2':null].filter(Boolean);
+  var d=icaiStart(o.level,gs,aLabel(o.idx));
+  o.date=d||iso(aDate(o.idx));o.auto=true;o.hasIcai=!!d;
+}
 function newProfile(o){
   var L=LEVELS[o.level],papers={};
   Object.keys(L.groups).forEach(function(g){L.groups[g].p.forEach(function(k){papers[k]={h:PAPERS[k].h,focus:false,conf:3,ch:starter(k)};});});
   return {id:uid(),name:o.name||'Student',level:o.level,groups:o.groups,examDate:o.examDate,dailyHours:o.dailyHours,
-    weeklyGoal:Math.round(o.dailyHours*6),target:50,rest:o.rest,planStart:iso(today()),papers:papers,attempts:[],sessions:[],mocks:[],created:iso(today())};
+    weeklyGoal:Math.round(o.dailyHours*6),target:50,rest:o.rest,planStart:iso(today()),papers:papers,attempts:[],sessions:[],mocks:[],created:iso(today()),dateAuto:!!o.dateAuto,sylVer:SYLVER};
 }
 
 /* ---------- results analysis + exemption ---------- */
@@ -371,6 +511,7 @@ function initCloud(){
   try{
     cloud.client=window.supabase.createClient(cloud.cfg.url,cloud.cfg.key);
     cloud.state='out';
+    fetchRemote();
     cloud.client.auth.getSession().then(function(r){
       var s=r&&r.data&&r.data.session;
       if(s&&!cloud.user){cloud.user=s.user;cloud.state='on';onSignedIn();}
@@ -380,7 +521,7 @@ function initCloud(){
       var was=cloud.user&&cloud.user.id;
       cloud.user=session?session.user:null;
       if(session){cloud.state='on';if(!was)onSignedIn();}
-      else{cloud.state='out';cloud.links=[];cloud.goals=[];cloud.progress=[];cloud.partner=null;cloud.lastProg={};}
+      else{cloud.state='out';cloud.links=[];cloud.goals=[];cloud.progress=[];cloud.partner=null;cloud.psums={};cloud.isAdmin=false;cloud.pending=[];cloud.lb=null;cloud.lastProg={};}
       render();
     });
   }catch(e){cloud.state='off';cmsg('Could not start the cloud: '+e.message,'bad');}
@@ -482,6 +623,21 @@ async function updateMyProgress(){
     if(!u.error)cloud.lastProg[g.id]=v;
   }
 }
+
+/* re-render without wiping what the user is typing (used by background refreshes) */
+function renderKeep(){
+  var snap={},fid=document.activeElement&&document.activeElement.id,selS=null;
+  document.querySelectorAll('#app input[id],#app textarea[id],#app select[id]').forEach(function(e){
+    if(e.type==='checkbox'||e.type==='radio')snap[e.id]={c:e.checked};else snap[e.id]={v:e.value};
+  });
+  try{if(fid&&document.activeElement.setSelectionRange)selS=[document.activeElement.selectionStart,document.activeElement.selectionEnd];}catch(e){}
+  render();
+  Object.keys(snap).forEach(function(id){
+    var e=document.getElementById(id);if(!e)return;
+    if(snap[id].c!==undefined)e.checked=snap[id].c;else if(snap[id].v!==undefined&&snap[id].v!==''&&e.value!==snap[id].v)e.value=snap[id].v;
+  });
+  if(fid){var f=document.getElementById(fid);if(f){f.focus();try{if(selS&&f.setSelectionRange)f.setSelectionRange(selS[0],selS[1]);}catch(e){}}}
+}
 async function refreshPartner(){
   if(!cloud.client||!cloud.user)return;
   try{
@@ -494,8 +650,18 @@ async function refreshPartner(){
     cloud.goals=g.data||[];
     var gp=await cloud.client.from('goal_progress').select('*');
     cloud.progress=gp.data||[];
+    cloud.psums=cloud.psums||{};
+    var live={};
+    var mineS=null;try{var sp0=shareProfile();if(sp0)mineS=buildSummary(sp0);}catch(e){}
+    for(var i=0;i<cloud.links.length;i++){
+      var lk=cloud.links[i];if(lk.status!=='accepted')continue;live[lk.id]=1;
+      try{var sm=await cloud.client.rpc('get_partner_summary',{p_link:lk.id});if(!sm.error)cloud.psums[lk.id]={data:sm.data,mine:mineS};}catch(e){}
+    }
+    Object.keys(cloud.psums).forEach(function(id){if(!live[id])delete cloud.psums[id];});
+    try{var ia=await cloud.client.rpc('is_admin');cloud.isAdmin=!ia.error&&ia.data===true;}catch(e){cloud.isAdmin=false;}
+    if(cloud.isAdmin){try{var pd=await cloud.client.from('calendar_pending').select('*').eq('status','pending').order('created_at',{ascending:false});cloud.pending=(pd&&pd.data)||[];}catch(e){cloud.pending=[];}}
   }catch(e){toast((e&&e.message)||'Could not load partner data');}
-  render();
+  renderKeep();
 }
 
 /* what a partner MAY see (the database filters it again by your switches). Notes, mistakes, pending work are never included. */
@@ -566,7 +732,7 @@ function defaultAttemptIdx(){var i=aIdx(today());while(diff(today(),aDate(i))<30
 
 function viewOnboard(){
   var o=ui.onb;
-  if(!o){var idx=defaultAttemptIdx();o=ui.onb={name:'',level:'inter',g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};}
+  if(!o){var idx=defaultAttemptIdx();o=ui.onb={name:'',level:'inter',g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};onbDate(o);}
   var L=LEVELS[o.level];
   var lv=Object.keys(LEVELS).map(function(k){return '<label style="color:var(--tx)"><input type="radio" name="lv" data-ob="level" value="'+k+'"'+(o.level===k?' checked':'')+'> '+LEVELS[k].name+'</label>';}).join('');
   var gr='';
@@ -580,13 +746,79 @@ function viewOnboard(){
     '<label>Your name</label><input type="text" data-ob="name" value="'+esc(o.name)+'" placeholder="Name">'+
     '<label>Level</label><div class="opt" data-lv>'+lv+'</div>'+gr+
     '<label>Exam attempt you are preparing for</label><select data-chg="onattempt">'+nextAttemptOptions(o.idx)+'</select>'+
-    '<label>Exam start date (edit when ICAI announces the exact date)</label><input type="date" data-ob="date" value="'+esc(o.date)+'">'+
+    '<label>Exam start date</label><input type="date" data-ob="date" value="'+esc(o.date)+'">'+
+    '<div class="mut" style="margin-top:4px">'+(o.auto&&o.hasIcai?'Set from the ICAI schedule (first paper of your group). It will update by itself if ICAI changes it.':(o.auto?'ICAI has not announced this attempt yet, so this is an estimate. The app will fix it by itself when the date is published.':'You chose this date yourself, so it will not change automatically.'))+'</div>'+
     '<label>Study hours per day you can really give</label><input type="number" min="1" max="14" step="0.5" data-ob="hours" value="'+esc(o.hours)+'">'+
     '<label>Weekly rest day</label><select data-ob="rest">'+rest+'</select>'+
     '<div class="row" style="margin-top:14px"><button class="btn" data-act="createprof">Create my plan</button>'+(S.profiles.length?'<button class="btn sec" data-act="cancelonb">Cancel</button>':'')+'</div>'+
     '<div class="mut" style="margin-top:10px">Already attempted an exam? Create the plan first, then enter your marks in <b>Results</b>. The app will adjust the plan.</div></div>';
 }
 
+
+function partnerGlance(){
+  if(!cloud.user||!cloud.psums)return '';
+  var h='';
+  (cloud.links||[]).forEach(function(l){
+    if(l.status!=='accepted')return;
+    var ps=cloud.psums[l.id];if(!ps||!ps.data||!ps.data.shared)return;
+    var sh=ps.data.shared,nm=ps.data.name||'Partner',parts=[];
+    if(sh.study_time)parts.push(esc(sh.study_time.last7Hours)+' h in 7 days, streak '+esc(sh.study_time.streakDays));
+    if(sh.overall)parts.push(esc(sh.overall.chaptersDone)+'/'+esc(sh.overall.chaptersTotal)+' chapters');
+    if(parts.length)h+='<div class="row sp" style="margin-top:4px"><span>'+esc(nm)+'</span><span class="mut">'+parts.join(' \u2022 ')+'</span></div>';
+  });
+  return h?'<div class="card"><h3>Your partner</h3>'+h+'<button class="btn sec sm" style="margin-top:8px" data-act="tab" data-t="partner">Open Partner</button></div>':'';
+}
+function sylBanner(P){
+  if(!(P.sylVer<SYLVER))return '';
+  var d=sylDiff(P);if(d.add+d.rem+d.mig===0)return '';
+  var parts=[];
+  if(d.mig)parts.push(d.mig+' chapter(s) split into units');
+  if(d.add)parts.push(d.add+' new');
+  if(d.rem)parts.push(d.rem+' removed');
+  return '<div class="card"><h3>Syllabus update available</h3><div>'+esc(parts.join(', '))+'.'+(SYLINFO?' '+esc(SYLINFO):'')+'</div><div class="mut" style="margin-top:4px">Your ticks and progress are kept. Chapters you already started are never deleted.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="applysyl">Apply update</button><button class="btn sec" data-act="skipsyl">Not now</button></div></div>';
+}
+function icaiCard(P,X){
+  var lab=aLabel(aIdx(parse(P.examDate))),e=CAL.attempts[lab],t=today();
+  if(!e)return '<div class="card"><h3>ICAI dates</h3><div class="mut">ICAI has not published the '+esc(lab)+' schedule in this app yet. Your exam date is an estimate and will be corrected automatically when it is added.</div></div>';
+  var h='<div class="card"><h3>ICAI schedule: '+esc(lab)+'</h3>';
+  var ks=[];Object.keys(LEVELS[P.level].groups).forEach(function(g){if(P.groups.indexOf(g)>=0)ks=ks.concat(LEVELS[P.level].groups[g].p);});
+  ks.forEach(function(k){var d=e.papers[k];if(!d)return;var n=diff(t,parse(d));h+='<div class="row sp" style="margin-top:4px"><span>'+esc(pfull(k))+'</span><span class="mut">'+esc(fmt(parse(d)))+(n>=0?' • '+n+' d':'')+'</span></div>';});
+  var f=e.form;
+  if(f&&f.last){
+    var nl=diff(t,parse(f.last));
+    h+='<div style="margin-top:8px"><b>Exam form:</b> '+(nl>=0?'last date '+esc(fmt(parse(f.last)))+' ('+nl+' days left)':'closed '+esc(fmt(parse(f.last))))+(f.late?'. With late fee '+(f.fee?esc(f.fee)+' ':'')+'till '+esc(fmt(parse(f.late))):'')+'</div>';
+  }
+  if(e.result)h+='<div class="mut" style="margin-top:4px">Result: '+esc(e.result)+'</div>';
+  return h+'<div class="mut" style="margin-top:6px">Always confirm on icai.org before acting.</div></div>';
+}
+function timerCard(P,X){
+  var t=tmGet();
+  if(t&&t.pid===P.id){
+    var chn='';if(t.ch){var cc=getCh(P,t.k,t.ch);if(cc)chn=lblOf(cc);}
+    return '<div class="card"><div class="row sp"><div><b>Studying: '+esc(pfull(t.k))+'</b><div class="mut">'+esc(chn)+'</div></div><div id="tm-el" style="font-size:26px;font-variant-numeric:tabular-nums">'+tmText(t)+'</div></div><div class="row" style="margin-top:8px"><button class="btn" data-act="tmstop">Stop and log</button><button class="btn sec sm" data-act="tmcancel">Discard</button></div></div>';
+  }
+  if(!X.study.length)return '';
+  ui.tm=ui.tm||{};var k=ui.tm.k&&X.study.indexOf(ui.tm.k)>=0?ui.tm.k:X.study[0];ui.tm.k=k;
+  var po=X.study.map(function(x){return '<option value="'+x+'"'+(x===k?' selected':'')+'>'+esc(pfull(x))+'</option>';}).join('');
+  var co='<option value="">Any chapter</option>'+P.papers[k].ch.filter(function(x){return x.status!=='done'&&!x.removed;}).map(function(x){return '<option value="'+x.id+'">'+esc(lblOf(x))+'</option>';}).join('');
+  return '<div class="card"><h3>Study timer</h3><div class="row"><select id="tm-k" data-chg="tmpaper">'+po+'</select><select id="tm-ch">'+co+'</select><button class="btn" data-act="tmstart">Start</button></div></div>';
+}
+function weakCard(P,X){
+  var w=weakChapters(P,X.study,5);if(!w.length)return '';
+  var h='<h2>Fix these first</h2><div class="card">';
+  w.forEach(function(x){h+='<div class="blk"><div>'+esc(lblOf(x.ch))+'<div class="mut">'+esc(pfull(x.k))+' • '+esc(x.why)+'</div></div></div>';});
+  return h+'<div class="mut" style="margin-top:6px">Based on your confidence ratings and the mistakes you note after sessions.</div></div>';
+}
+function weekCard(P){
+  var w=weekReport(P);
+  return '<div class="card"><h3>This week</h3><div class="row sp"><span>Study time</span><b>'+w.th+' h <span class="mut">/ goal '+w.goal+' h</span></b></div>'+bar(w.goal?w.th/w.goal*100:0)+
+    '<div class="row sp mut" style="margin-top:6px"><span>Last week</span><span>'+w.lh+' h</span></div><div class="row sp mut"><span>Chapters / units finished</span><span>'+w.ch+'</span></div><div class="row sp mut"><span>Mock tests</span><span>'+w.mocks+'</span></div>'+(w.top?'<div class="row sp mut"><span>Most time</span><span>'+esc(w.top)+' ('+w.topH+' h)</span></div>':'')+'<div class="row sp mut"><span>Streak</span><span>'+w.streak+' day(s)</span></div>'+
+    '<div style="margin-top:8px"><button class="btn sec sm" data-act="wkshare">Share this report</button></div></div>';
+}
+function tipsCard(){
+  if(S.tipsOff)return '';
+  return '<div class="card"><h3>Getting started</h3><div style="line-height:1.6">1. Enter your past marks in <b>Results</b>.<br>2. Check chapters in <b>Papers</b> and tick what you finished.<br>3. Each day open <b>Today</b>, use the timer, then tick units.<br>4. Add mock scores in <b>Log</b>. Weak chapters show up automatically.<br>5. Install the app: browser menu → Install app.</div><div style="margin-top:8px"><button class="btn sec sm" data-act="tipsoff">Got it, hide this</button></div></div>';
+}
 function viewToday(c){
   var P=c.P,X=c.X,I=c.I,T=todayPlan(c);
   var stl={ontrack:['On track','ok'],tight:['Tight','warn'],behind:['Behind','bad'],done:['Syllabus hours covered','ok']}[I.status];
@@ -604,6 +836,7 @@ function viewToday(c){
     html+='<p style="margin:10px 0 0">Focus on revision, past papers and your weak chapters. Do not start big new topics now.</p>';
   }
   html+='</div>';
+  html+=tipsCard()+sylBanner(P)+partnerGlance()+icaiCard(P,X)+timerCard(P,X);
   if(I.phase!=='over'){
     html+='<h2>Today\u2019s plan</h2><div class="card">';
     if(T.rest)html+='<div>Today is your rest day. Optional: 20 minutes of light revision.</div>';
@@ -617,7 +850,7 @@ function viewToday(c){
     var tk='',seen={};
     T.blocks.forEach(function(b){
       if(b.type!=='Study'||seen[b.k])return;seen[b.k]=1;
-      var nxt=P.papers[b.k].ch.filter(function(x){return x.status!=='done';}).slice(0,4);
+      var nxt=P.papers[b.k].ch.filter(function(x){return x.status!=='done'&&!x.removed;}).slice(0,4);
       if(!nxt.length)return;
       tk+='<div class="mut" style="margin-top:8px">'+esc(pfull(b.k))+'</div>';
       nxt.forEach(function(x){var g=grpOf(x);tk+='<div class="blk"><div>'+esc(lblOf(x))+(g&&x.unit?'<div class="mut" style="font-size:12px">'+esc(g)+'</div>':'')+'</div><div class="r"><button class="btn sm" data-act="tick" data-k="'+b.k+'" data-c="'+x.id+'">\u2713 Done</button></div></div>';});
@@ -631,6 +864,7 @@ function viewToday(c){
   });
   if(T.rv.length>12)html+='<div class="mut">+ '+(T.rv.length-12)+' more due</div>';
   html+='</div>';
+  html+=weakCard(P,X);
   html+=goalsCard(P);
   return html;
 }
@@ -638,7 +872,7 @@ function sessMins(P,from,to){return P.sessions.filter(function(s){return s.date>
 function goalsCard(P){
   var t=today(),ws=weekStart(t),td=sessMins(P,t,t),wk=sessMins(P,ws,addDays(ws,6));
   var dg=P.dailyHours*60,wg=P.weeklyGoal*60;
-  var h='<h2>Goals</h2><div class="card"><div class="row sp"><span>Today</span><span>'+fmtMin(td)+' / '+fmtMin(Math.round(dg))+'</span></div><div class="bar"><i style="width:'+clamp(td/dg*100,0,100)+'%"></i></div>'+
+  var h='<h2>Goals</h2><div class="card"><div class="mut" style="margin-bottom:6px">Study streak: '+streakDays(P)+' day(s)</div><div class="row sp"><span>Today</span><span>'+fmtMin(td)+' / '+fmtMin(Math.round(dg))+'</span></div><div class="bar"><i style="width:'+clamp(td/dg*100,0,100)+'%"></i></div>'+
     '<div class="row sp" style="margin-top:10px"><span>This week</span><span>'+fmtMin(wk)+' / '+fmtMin(Math.round(wg))+'</span></div><div class="bar"><i style="width:'+clamp(wk/wg*100,0,100)+'%"></i></div>';
   var hist='';
   for(var i=1;i<=6;i++){
@@ -652,7 +886,7 @@ function goalsCard(P){
 }
 
 function viewPapers(c){
-  var P=c.P,X=c.X,A=c.A,html='';
+  var P=c.P,X=c.X,A=c.A,html=sylBanner(P);
   X.groups.forEach(function(G){
     html+='<h2>'+esc(LEVELS[P.level].name)+' \u2022 '+esc(G.n)+(G.passed?' <span class="chip ok">Passed '+esc(G.passed)+'</span>':'')+'</h2>';
     if(G.passed){html+='<div class="card mut">This group is passed. No need to study it again.</div>';return;}
@@ -677,7 +911,7 @@ function viewPapers(c){
           if(g&&g!==lastG&&gc[g].n>1)html+='<div class="row sp" style="margin-top:12px"><b>'+esc(g)+'</b><span class="mut">'+gc[g].d+' / '+gc[g].n+' done</span></div>';
           lastG=g;
           var nx=(ch.revs||[]).filter(function(r){return !r.done;}).sort(function(a,b){return a.due<b.due?-1:1;})[0];
-          html+='<div class="ch" style="'+(g&&gc[g].n>1?'margin-left:10px':'')+'"><span class="nm">'+esc(gc[g]&&gc[g].n>1?lblOf(ch):ch.name)+(nx?'<div class="mut" style="font-size:12px">next revision '+fmt(parse(nx.due))+'</div>':'')+'</span>'+
+          html+='<div class="ch" style="'+(g&&gc[g].n>1?'margin-left:10px':'')+'"><span class="nm">'+esc(gc[g]&&gc[g].n>1?lblOf(ch):ch.name)+(ch.removed?' <span class="chip warn">Removed by ICAI</span>':'')+(nx?'<div class="mut" style="font-size:12px">next revision '+fmt(parse(nx.due))+'</div>':'')+'</span>'+
             '<select data-chg="chstatus" data-k="'+k+'" data-c="'+ch.id+'"><option value="todo"'+(ch.status==='todo'?' selected':'')+'>To do</option><option value="learning"'+(ch.status==='learning'?' selected':'')+'>Learning</option><option value="done"'+(ch.status==='done'?' selected':'')+'>Done</option></select>'+
             '<select data-chg="chconf" data-k="'+k+'" data-c="'+ch.id+'" title="Confidence">'+[1,2,3,4,5].map(function(n){return '<option value="'+n+'"'+(ch.conf===n?' selected':'')+'>Conf '+n+'</option>';}).join('')+'</select>'+
             (ch.unit?'':'<button class="btn sec sm" data-act="splitch" data-k="'+k+'" data-c="'+ch.id+'" title="Split this chapter into units">Units</button>')+
@@ -765,7 +999,7 @@ function viewLog(c){
   var P=c.P,L=LEVELS[P.level],keys=[];
   Object.keys(L.groups).forEach(function(g){keys=keys.concat(L.groups[g].p);});
   var po=keys.map(function(k){return '<option value="'+k+'">'+esc(pfull(k))+'</option>';}).join('');
-  var html='<div class="row" style="margin-bottom:12px"><button class="btn" data-act="logsession">Log a study session</button></div>';
+  var html='<div class="row" style="margin-bottom:12px"><button class="btn" data-act="logsession">Log a study session</button></div>'+weekCard(P);
   html+='<div class="card"><h3>Add mock / test score</h3><div class="row"><select id="mk-paper">'+po+'</select><input type="date" id="mk-date" value="'+iso(today())+'" style="width:auto"><input type="number" id="mk-score" min="0" step="0.5" placeholder="Score"> / <input type="number" id="mk-max" min="1" value="100"></div><div style="margin-top:8px"><button class="btn sec sm" data-act="addmock">Add</button></div>';
   P.mocks.slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,8).forEach(function(m){
     html+='<div class="blk"><div>'+esc(pfull(m.paper))+'<div class="mut">'+fmt(parse(m.date))+'</div></div><div class="r"><b>'+m.score+'/'+m.max+'</b><button class="btn danger sm" data-act="delmock" data-id="'+m.id+'">\u00d7</button></div></div>';
@@ -818,8 +1052,8 @@ var PREFS=[['overall','Overall progress'],['subjects','Subject-wise progress'],[
 function bar(p){return '<div class="bar"><i style="width:'+clamp(Number(p)||0,0,100)+'%"></i></div>';}
 function renderSummary(pd,mine){
   var d=pd||{},sh=d.shared||{},keys=Object.keys(sh);
-  var h='<div class="card" style="border-color:var(--ac)"><div class="row sp"><h3>'+esc(d.name||'Partner')+'’s shared progress</h3><button class="btn sec sm" data-act="closep">Close</button></div><div class="mut">This is your partner’s data, shown only because she switched it on.'+(d.updated_at?' Updated '+esc(fmtTs(d.updated_at))+'.':'')+'</div>';
-  if(!keys.length)h+='<p>'+esc(d.note||'Your partner has not switched on any sharing yet.')+'</p>';
+  var h='<div class="card" style="border-color:var(--ac)"><div class="row sp"><h3>'+esc(d.name||'Partner')+'’s shared progress</h3></div><div class="mut">Shown automatically. Notes, mistakes and pending work are never shared.'+(d.updated_at?' Updated '+esc(fmtTs(d.updated_at))+'.':'')+'</div>';
+  if(!keys.length)h+='<p>'+esc(d.note||'Nothing is shared yet. Ask them to open the app once so it syncs.')+'</p>';
   if(sh.overall){var o=sh.overall;h+='<h3 style="margin-top:12px">Overall</h3><div>'+esc(o.level)+' • '+esc(o.exam)+' exam • '+esc(o.daysLeft)+' days left</div><div class="mut">Syllabus hours covered: '+esc(o.syllabusHoursPct)+'% • Chapters: '+esc(o.chaptersDone)+' / '+esc(o.chaptersTotal)+'</div>'+bar(o.syllabusHoursPct);}
   if(sh.subjects&&sh.subjects.length){h+='<h3 style="margin-top:12px">Subjects</h3>';sh.subjects.forEach(function(s){var p=s.hoursNeeded?s.hoursDone/s.hoursNeeded*100:0;h+='<div style="margin-top:6px"><div class="row sp"><span>'+esc(s.paper)+' '+esc(s.name)+'</span><span class="mut">'+esc(s.hoursDone)+' / '+esc(s.hoursNeeded)+' h • '+esc(s.chaptersDone)+'/'+esc(s.chaptersTotal)+' ch</span></div>'+bar(p)+'</div>';});}
   if(sh.chapters&&sh.chapters.length){h+='<h3 style="margin-top:12px">Chapters completed</h3>';sh.chapters.forEach(function(c){h+='<div style="margin-top:6px"><b>'+esc(c.paper)+'</b> <span class="mut">'+esc((c.done||[]).length)+' / '+esc(c.total)+' done, '+esc(c.learning)+' in progress</span>'+((c.done||[]).length?'<div class="mut" style="font-size:12px">'+(c.done||[]).map(esc).join(' • ')+'</div>':'')+'</div>';});}
@@ -839,13 +1073,16 @@ function aiContext(P){
     var lv=lastScore(P,k),nx=P.papers[k].ch.filter(function(x){return x.status!=='done';}).slice(0,3).map(function(x){return lblOf(x);});
     out.push(pfull(k)+(lv!==null?' last score '+Math.round(lv):'')+(nx.length?'; next: '+nx.join(', '):''));
   });
+  var wk=weakChapters(P,X.study,5).map(function(x){return lblOf(x.ch)+' ('+x.why+')';});
+  if(wk.length)out.push('Weak chapters: '+wk.join('; '));
   return out.join('\n').slice(0,1400);
 }
 function viewAI(c){
   if(!cloud.cfg||cloud.state==='off'||cloud.state==='nolib'||!cloud.user)return '<div class="card"><h3>AI tutor</h3><p>Sign in to your cloud account first (Settings → Cloud account). The AI runs on your own Supabase project, so no key is ever kept in this page.</p><button class="btn" data-act="tab" data-t="settings">Go to Settings</button></div>';
   var a=ui.ai;
   var h='<div class="card"><h3>AI tutor</h3><div class="mut">Ask a doubt, get a topic explained, or get 5 practice questions. Up to 30 a day. Answers can be wrong: check important points in ICAI material.</div>'+
-   '<label>What do you want?</label><select id="ai-mode"><option value="ask"'+(a.mode==='ask'?' selected':'')+'>Answer my doubt</option><option value="explain"'+(a.mode==='explain'?' selected':'')+'>Explain a topic</option><option value="quiz"'+(a.mode==='quiz'?' selected':'')+'>Give me practice questions</option><option value="plan"'+(a.mode==='plan'?' selected':'')+'>Suggest how to study this week</option></select>'+
+   '<label>What do you want?</label><select id="ai-mode" data-chg="aimode"><option value="ask"'+(a.mode==='ask'?' selected':'')+'>Answer my doubt</option><option value="explain"'+(a.mode==='explain'?' selected':'')+'>Explain a topic</option><option value="quiz"'+(a.mode==='quiz'?' selected':'')+'>Give me practice questions</option><option value="plan"'+(a.mode==='plan'?' selected':'')+'>Suggest how to study this week</option><option value="material"'+(a.mode==='material'?' selected':'')+'>Answer only from text I paste (from my material)</option></select>'+
+   (a.mode==='material'?'<label>Paste text from your study material (up to 6000 characters)</label><textarea id="ai-mat" maxlength="6000" style="min-height:140px" placeholder="Paste the paragraph / page from your book here">'+esc(a.mat||'')+'</textarea><div class="mut">The AI will use only this text. If the answer is not in it, it will say so.</div>':'')+
    '<label>Your question or topic</label><textarea id="ai-q" maxlength="2000" placeholder="Example: Explain AS 10 with a simple example">'+esc(a.q)+'</textarea>'+
    '<label style="display:flex;gap:6px;align-items:center;color:var(--tx)"><input type="checkbox" id="ai-ctx"'+(a.ctx?' checked':'')+'> Share my papers, last scores and next chapters with the AI (nothing else)</label>'+
    '<div style="margin-top:8px"><button class="btn" data-act="aiask"'+(a.busy?' disabled':'')+'>'+(a.busy?'Thinking…':'Ask')+'</button></div></div>';
@@ -854,11 +1091,12 @@ function viewAI(c){
   return h;
 }
 async function aiAsk(P){
-  var a=ui.ai;a.mode=readv('ai-mode')||a.mode;a.q=readv('ai-q').trim();var cx=document.getElementById('ai-ctx');a.ctx=cx?cx.checked:a.ctx;
+  var a=ui.ai;a.mode=readv('ai-mode')||a.mode;a.q=readv('ai-q').trim();if(a.mode==='material')a.mat=readv('ai-mat');var cx=document.getElementById('ai-ctx');a.ctx=cx?cx.checked:a.ctx;
   if(!a.q){a.err='Type your question first';a.ans='';render();return;}
+  if(a.mode==='material'&&!String(a.mat||'').trim()){a.err='Paste the text from your material first';a.ans='';render();return;}
   a.busy=true;a.err='';a.ans='';render();
   try{
-    var r=await cloud.client.functions.invoke('ai-tutor',{body:{mode:a.mode,question:a.q,context:a.ctx?aiContext(P):''}});
+    var r=await cloud.client.functions.invoke('ai-tutor',{body:{mode:a.mode,question:a.q,context:a.mode==='material'?'':(a.ctx?aiContext(P):''),material:a.mode==='material'?String(a.mat||'').slice(0,6000):''}});
     if(r.error){
       var msg='The AI function is not reachable. Has it been deployed? (see the setup guide)';
       try{if(r.error.context&&r.error.context.json){var j=await r.error.context.json();if(j&&j.error)msg=j.error;}}catch(e){}
@@ -869,6 +1107,26 @@ async function aiAsk(P){
   }catch(e){a.err=(e&&e.message)||'Something went wrong';}
   a.busy=false;render();
 }
+
+async function loadLB(){
+  if(!cloud.client||!cloud.user)return;
+  var rows=[],mp=shareProfile();
+  if(mp){var ms=buildSummary(mp);rows.push({name:'You',h:ms.study_time.last7Hours,streak:ms.study_time.streakDays,me:true});}
+  var acc=(cloud.links||[]).filter(function(l){return l.status==='accepted';}),me=cloud.user.id;
+  for(var i=0;i<acc.length;i++){
+    var l=acc[i],other=l.requester===me?l.invitee_email:l.requester_email;
+    try{var r=await rpc('get_partner_summary',{p_link:l.id});var st=r&&r.shared&&r.shared.study_time;rows.push({name:(r&&r.name)||other,h:st?st.last7Hours:null,streak:st?st.streakDays:null});}
+    catch(e){rows.push({name:other,h:null,streak:null});}
+  }
+  rows.sort(function(a,b){return (b.h===null?-1:b.h)-(a.h===null?-1:a.h);});
+  cloud.lb=rows;render();
+}
+function lbCard(){
+  var h='<div class="card"><div class="row sp"><h3>Leaderboard (last 7 days)</h3><button class="btn sec sm" data-act="lb">'+(cloud.lb?'Refresh':'Show')+'</button></div>';
+  if(!cloud.lb)return h+'<div class="mut">Compares study hours with everyone connected to you who has switched on “Study time and streaks”.</div></div>';
+  cloud.lb.forEach(function(r,i){h+='<div class="row sp" style="margin-top:6px"><span>'+(i+1)+'. '+esc(r.name)+(r.me?' (you)':'')+'</span><span>'+(r.h===null?'<span class="mut">not sharing</span>':'<b>'+esc(r.h)+' h</b> <span class="mut">streak '+esc(r.streak)+'</span>')+'</span></div>';});
+  return h+'</div>';
+}
 function viewPartner(c){
   if(!cloud.cfg||cloud.state==='off')return '<div class="card"><h3>Partner</h3><p>Partner features need the free cloud account. Setting it up takes about 10 minutes, once.</p><button class="btn" data-act="tab" data-t="settings">Open cloud setup</button></div>';
   if(cloud.state==='nolib')return '<div class="card"><h3>Partner</h3><p>The cloud library could not load. Check your internet and reload the page.</p></div>';
@@ -876,7 +1134,8 @@ function viewPartner(c){
   var me=cloud.user.id,myMail=String(cloud.user.email||'').toLowerCase();
   var po=S.profiles.map(function(p){var sel=shareProfile();return '<option value="'+esc(p.id)+'"'+(sel&&sel.id===p.id?' selected':'')+'>'+esc(p.name)+' • '+esc(LEVELS[p.level].name)+'</option>';}).join('');
   var h='<div class="card"><h3>Profile you share with your partner</h3><select data-chg="shareprof">'+po+'</select><div class="mut" style="margin-top:6px">Your partner only sees what you switch on for her below. Notes, mistakes, pending work and anything private are never shared.</div></div>';
-  h+='<div class="card"><h3>Invite your partner</h3><div class="row"><input type="text" id="pt-email" placeholder="partner@email.com" style="flex:1;min-width:180px"><button class="btn" data-act="invite">Send invite</button></div><div class="mut" style="margin-top:6px">She needs her own account in the same cloud project. The invite shows up in her Partner tab.</div></div>';
+  h+=lbCard();
+  h+='<div class="card"><h3>Invite a partner or friend</h3><div class="row"><input type="text" id="pt-email" placeholder="partner@email.com" style="flex:1;min-width:180px"><button class="btn" data-act="invite">Send invite</button></div><div class="mut" style="margin-top:6px">They need their own account (same app link). The invite shows up in their Partner tab.</div></div>';
   var live=cloud.links.filter(function(l){return l.status==='pending'||l.status==='accepted';});
   if(!live.length)h+='<div class="card mut">No connections yet.</div>';
   live.forEach(function(l){
@@ -888,10 +1147,13 @@ function viewPartner(c){
     }
     var pf=cloud.prefs[l.id]||{};
     h+='<div class="card"><div class="row sp"><div><h3>'+esc(other)+'</h3><span class="chip ok">Connected</span></div><button class="btn danger sm" data-act="revoke" data-l="'+esc(l.id)+'">Disconnect</button></div>';
-    h+='<h3 style="margin-top:14px">What you share with her</h3><div class="mut">All switches start OFF. You can change or remove them any time.</div><div class="opt" style="margin-top:8px">'+
+    h+='<h3 style="margin-top:14px">What you share with them</h3><div class="mut">All switches start OFF. You can change or remove them any time.</div><div class="opt" style="margin-top:8px">'+
       PREFS.map(function(p){return '<label><input type="checkbox" data-chg="pref" data-l="'+esc(l.id)+'" data-f="'+p[0]+'"'+(pf[p[0]]?' checked':'')+'> '+p[1]+'</label>';}).join('')+'</div>';
-    h+='<div class="row" style="margin-top:12px"><button class="btn" data-act="viewp" data-l="'+esc(l.id)+'">View her shared progress</button></div>';
-    if(cloud.partner&&cloud.partner.link===l.id)h+=renderSummary(cloud.partner.data,cloud.partner.mine);
+    var psx=cloud.psums&&cloud.psums[l.id];
+    var anyOn=PREFS.some(function(p){return pf[p[0]];});
+    h+='<div class="row" style="margin-top:10px">'+(anyOn?'<button class="btn sec sm" data-act="shareall" data-l="'+esc(l.id)+'" data-on="0">Stop sharing everything</button>':'<button class="btn" data-act="shareall" data-l="'+esc(l.id)+'" data-on="1">Share my progress with them</button>')+'<button class="btn sec sm" data-act="viewp" data-l="'+esc(l.id)+'">Refresh</button></div>';
+    if(!anyOn)h+='<div class="mut" style="margin-top:6px">You are not sharing anything right now, so they cannot see your progress.</div>';
+    h+=psx?renderSummary(psx.data,psx.mine):'<div class="mut" style="margin-top:8px">Loading their progress\u2026</div>';
     // shared goals
     h+='<h3 style="margin-top:16px">Shared goals</h3>';
     var gs=cloud.goals.filter(function(g){return g.link_id===l.id;});
@@ -935,7 +1197,7 @@ function cact(a,d){
     if(confirm('Disconnect the cloud? Your data stays on this device.')){
       if(cloud.client)cloud.client.auth.signOut().catch(function(){});
       cloud.cfg=null;try{localStorage.removeItem(CKEY);}catch(e){}
-      cloud.user=null;cloud.client=null;cloud.state='off';cloud.links=[];cloud.partner=null;cmsg('');render();
+      cloud.user=null;cloud.client=null;cloud.state='off';cloud.links=[];cloud.partner=null;cloud.psums={};cloud.isAdmin=false;cloud.pending=[];cmsg('');render();
     }
     return true;
   }
@@ -965,9 +1227,23 @@ function cact(a,d){
     return true;
   }
   if(a==='viewp'){
-    guard(rpc('get_partner_summary',{p_link:d.l}).then(function(r){cloud.partner={link:d.l,data:r,mine:buildSummary(shareProfile())};render();}));return true;
+    guard(refreshPartner());return true;
   }
-  if(a==='closep'){cloud.partner=null;render();return true;}
+  if(a==='closep'){return true;}
+  if(a==='shareall'){
+    var on=d.on==='1',row2={link_id:d.l,owner:cloud.user.id};PREFS.forEach(function(p){row2[p[0]]=on;});
+    guard(cloud.client.from('share_prefs').upsert(row2,{onConflict:'link_id,owner'}).then(function(r){if(r.error)throw r.error;return pushSummary();}).then(function(){toast(on?'Sharing on':'Sharing off');return refreshPartner();}));
+    return true;
+  }
+  if(a==='calcheck'){
+    guard(cloud.client.functions.invoke('icai-check',{body:{}}).then(function(r){
+      if(r.error)throw new Error('The ICAI check function is not set up yet (see SETUP guide)');
+      var m=(r.data&&(r.data.message||r.data.error))||'Done';toast(m);return refreshPartner();
+    }));return true;
+  }
+  if(a==='calok'||a==='calno'){
+    guard(rpc(a==='calok'?'approve_calendar':'reject_calendar',{p_id:d.id}).then(function(m){toast(m);return fetchRemote().then(refreshPartner);}));return true;
+  }
   if(a==='addgoal'){
     var title=readv('gt-'+d.l).trim(),kind=readv('gk-'+d.l),target=Number(readv('gn-'+d.l)),end=readv('ge-'+d.l);
     if(!title||!(target>0)||!end||end<iso(today())){toast('Enter a title, a target above 0 and an end date that is not in the past');return true;}
@@ -1005,6 +1281,28 @@ function cchg(k,d,el){
   return false;
 }
 
+
+function adminCard(){
+  if(!cloud.isAdmin)return '';
+  var h='<div class="card"><h3>ICAI dates (admin)</h3><div class="mut">The app can look up ICAI’s announced dates. Nothing changes for anyone until you approve.</div><div style="margin-top:8px"><button class="btn sec" data-act="calcheck">Check ICAI now</button></div>';
+  var pd=cloud.pending||[];
+  if(!pd.length)h+='<div class="mut" style="margin-top:8px">No dates waiting for approval.</div>';
+  pd.forEach(function(p){
+    var at=(p.proposed&&p.proposed.attempts)||{};
+    h+='<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px">';
+    Object.keys(at).forEach(function(lb){
+      var a=at[lb];h+='<b>'+esc(lb)+'</b>';
+      Object.keys(a.papers||{}).forEach(function(k){h+='<div class="row sp mut"><span>'+esc(PAPERS[k]?pfull(k):k)+'</span><span>'+esc(fmt(parse(a.papers[k])))+'</span></div>';});
+      if(a.form&&a.form.last)h+='<div class="mut">Exam form last date: '+esc(fmt(parse(a.form.last)))+'</div>';
+      if(a.result)h+='<div class="mut">Result: '+esc(a.result)+'</div>';
+    });
+    var src=(p.sources||[]).slice(0,3);
+    if(src.length)h+='<div class="mut" style="margin-top:4px;word-break:break-all">Sources: '+src.map(esc).join(' , ')+'</div>';
+    if(p.note)h+='<div class="mut">'+esc(p.note)+'</div>';
+    h+='<div class="mut" style="margin-top:4px">Check these on icai.org before approving.</div><div class="row" style="margin-top:6px"><button class="btn" data-act="calok" data-id="'+esc(p.id)+'">Approve</button><button class="btn danger sm" data-act="calno" data-id="'+esc(p.id)+'">Reject</button></div></div>';
+  });
+  return h+'</div>';
+}
 function viewSettings(c){
   var P=c.P,L=LEVELS[P.level],html='<div class="card"><h3>Profile settings</h3>';
   html+='<label>Name</label><input type="text" id="st-name" value="'+esc(P.name)+'">';
@@ -1012,13 +1310,19 @@ function viewSettings(c){
   if(P.level!=='foundation'){
     html+='<label>Groups you are preparing for</label><div class="opt">'+Object.keys(L.groups).map(function(g){return '<label style="color:var(--tx)"><input type="checkbox" data-grp="'+g+'"'+(P.groups.indexOf(g)>=0?' checked':'')+'> '+L.groups[g].n+'</label>';}).join('')+'</div>';
   }
+  var icd=icaiStart(P.level,P.groups,aLabel(aIdx(parse(P.examDate))));
   html+='<label>Exam start date</label><input type="date" id="st-date" value="'+esc(P.examDate)+'">';
+  html+='<div class="mut" style="margin-top:4px">'+(P.dateAuto?(icd?'Following the ICAI schedule automatically.':'Estimate. Will be corrected automatically when ICAI publishes the date.'):'Set by you. ')+(icd&&P.examDate!==icd?' ICAI date is '+esc(fmt(parse(icd)))+'. ':'')+'</div>'+(icd&&P.examDate!==icd?'<div style="margin-top:6px"><button class="btn sec sm" data-act="useicai">Use ICAI date</button></div>':'');
   html+='<label>Study hours per day</label><input type="number" id="st-hours" min="1" max="14" step="0.5" value="'+P.dailyHours+'">';
   html+='<label>Weekly goal (hours)</label><input type="number" id="st-wg" min="1" max="90" step="1" value="'+P.weeklyGoal+'">';
   html+='<label>Target marks per paper (used to find weak papers)</label><input type="number" id="st-target" min="40" max="100" step="1" value="'+P.target+'">';
   html+='<label>Weekly rest day</label><select id="st-rest"><option value="-1"'+(P.rest<0?' selected':'')+'>No rest day</option>'+DAYN.map(function(d,i){return '<option value="'+i+'"'+(P.rest===i?' selected':'')+'>'+d+'</option>';}).join('')+'</select>';
   html+='<div style="margin-top:12px"><button class="btn" data-act="saveset">Save settings</button></div></div>';
+  html+='<div class="card"><h3>Daily reminder</h3><div class="mut">Adds a repeating study reminder to your phone calendar. Open the downloaded file and choose your calendar app.</div><div class="row" style="margin-top:8px"><input type="time" id="rm-time" value="06:30" style="width:auto"><button class="btn sec" data-act="icsdl">Download reminder</button></div></div>';
+  html+='<div class="card"><h3>Share this app</h3><div class="mut">Send the link to friends. Each person signs up with their own email and gets their own plan.</div><div style="margin-top:8px"><button class="btn sec" data-act="shareapp">Share app link</button></div></div>';
+  html+=adminCard();
   html+=cloudCard();
+  html+='<div class="mut" style="margin:6px 0">ICAI calendar version '+esc(CAL.version)+' • Syllabus version '+esc(SYLVER)+'</div>';
   html+='<div class="card"><h3>Backup</h3><div class="mut">Your data lives only in this browser. Export a backup file regularly and keep it safe. Importing adds profiles; it never overwrites existing ones.</div><div class="row" style="margin-top:10px"><button class="btn sec" data-act="export">Export backup</button><button class="btn sec" data-act="import">Import backup</button><input type="file" id="impf" accept=".json,application/json" style="display:none" data-chg="importfile"></div></div>';
   html+='<div class="card"><h3>Danger zone</h3><button class="btn danger" data-act="delprof">Delete this profile</button></div>';
   return html;
@@ -1048,6 +1352,7 @@ function render(){
   var app=document.getElementById('app'),P=cur();
   document.documentElement.dataset.theme=theme();
   if(!P||ui.onb){app.innerHTML=head(P)+viewOnboard();return;}
+  normP(P);
   var A=analyse(P),X=activeInfo(P,A),I=planInfo(P,A,X),c={P:P,A:A,X:X,I:I},body='';
   if(ui.tab==='today')body=viewToday(c);
   else if(ui.tab==='papers')body=viewPapers(c);
@@ -1084,8 +1389,28 @@ function allKeys(P){var L=LEVELS[P.level],k=[];Object.keys(L.groups).forEach(fun
 
 function act(a,d){
   var P=cur();
-  if(a==='tab'){ui.tab=d.t;render();window.scrollTo(0,0);return;}
+  if(a==='tab'){ui.tab=d.t;render();window.scrollTo(0,0);if(d.t==='partner'&&cloud.user)refreshPartner();return;}
   if(a==='aiask'){aiAsk(P);return;}
+  if(a==='applysyl'){var rr=applySyl(P);commit();toast(rr.added+' added'+(rr.removed?', '+rr.removed+' removed':'')+(rr.flagged?', '+rr.flagged+' marked removed':''));return;}
+  if(a==='skipsyl'){P.sylVer=SYLVER;commit();return;}
+  if(a==='useicai'){var ic=icaiStart(P.level,P.groups,aLabel(aIdx(parse(P.examDate))));if(ic){P.examDate=ic;P.dateAuto=true;commit();toast('ICAI date set');}return;}
+  if(a==='tipsoff'){S.tipsOff=true;save();render();return;}
+  if(a==='tmstart'){var tk=readv('tm-k'),tc=readv('tm-ch');if(!tk)return;tmSet({pid:P.id,k:tk,ch:tc,t0:Date.now()});render();return;}
+  if(a==='tmcancel'){if(confirm('Discard this timer?')){tmSet(null);render();}return;}
+  if(a==='tmstop'){var tt=tmGet();if(!tt)return;var mins=Math.max(5,Math.round((Date.now()-tt.t0)/60000));tmSet(null);ui.modal={type:'session',k:tt.k,min:mins,ch:tt.ch||''};render();return;}
+  if(a==='icsdl'){
+    var txt=icsText(readv('rm-time')||'06:30',location.href.split('#')[0]);
+    try{var bl=new Blob([txt],{type:'text/calendar'}),u=URL.createObjectURL(bl),lk=document.createElement('a');lk.href=u;lk.download='studyos-reminder.ics';document.body.appendChild(lk);lk.click();lk.remove();setTimeout(function(){URL.revokeObjectURL(u);},2000);toast('Reminder file downloaded. Open it to add to your calendar.');}catch(e){toast('Could not create the file');}
+    return;
+  }
+  if(a==='wkshare'||a==='shareapp'){
+    var tx=a==='wkshare'?weekText(P):'CA StudyOS: free study planner for CA Foundation, Intermediate and Final. '+location.href.split('#')[0].replace(/index\.html$/,'');
+    if(navigator.share){navigator.share({title:'CA StudyOS',text:tx}).catch(function(){});}
+    else if(navigator.clipboard){navigator.clipboard.writeText(tx).then(function(){toast('Copied. Paste it in WhatsApp.');},function(){toast('Could not copy');});}
+    else prompt('Copy this:',tx);
+    return;
+  }
+  if(a==='lb'){loadLB();return;}
   if(a==='theme'){var t=theme()==='dark'?'light':'dark';try{localStorage.setItem(TKEY,t);}catch(e){}render();return;}
   if(a==='newprof'){startOnb();render();window.scrollTo(0,0);return;}
   if(a==='cancelonb'){ui.onb=null;render();return;}
@@ -1097,7 +1422,7 @@ function act(a,d){
     if(!o.date){toast('Choose the exam date');return;}
     var hrs=Number(o.hours);
     if(!(hrs>=1&&hrs<=14)){toast('Daily hours must be between 1 and 14');return;}
-    var np=newProfile({name:String(o.name||'').trim(),level:o.level,groups:groups,examDate:o.date,dailyHours:hrs,rest:Number(o.rest)});
+    var np=newProfile({name:String(o.name||'').trim(),level:o.level,groups:groups,examDate:o.date,dailyHours:hrs,rest:Number(o.rest),dateAuto:!!o.auto});
     S.profiles.push(np);S.active=np.id;ui.onb=null;ui.tab='today';ui.res=null;commit();toast('Plan created');return;
   }
   if(!P)return;
@@ -1213,7 +1538,8 @@ function act(a,d){
     var idx=aIdx(parse(last.date))+1;
     while(diff(today(),aDate(idx))<30)idx++;
     if(!confirm('Set your next exam to '+aLabel(idx)+' ('+fmt(aDate(idx))+') and restart hour counting from today? Hours needed per paper will be adjusted using your last marks. You can edit everything afterwards.'))return;
-    P.examDate=iso(aDate(idx));P.planStart=iso(today());
+    var ic3=icaiStart(P.level,P.groups,aLabel(idx));
+    P.examDate=ic3||iso(aDate(idx));P.dateAuto=true;P.planStart=iso(today());
     var X2=activeInfo(P,A);
     X2.study.forEach(function(k){
       var lv=lastScore(P,k),f=lv===null?1:clamp(0.45+0.55*(1-Math.min(lv,60)/60),0.45,1);
@@ -1243,7 +1569,8 @@ function act(a,d){
     document.querySelectorAll('[data-grp]').forEach(function(e){if(e.checked)gs.push(e.dataset.grp);});
     if(P.level==='foundation')gs=['ALL'];
     if(!gs.length){toast('Pick at least one group');return;}
-    P.name=nm;P.dailyHours=h2;P.weeklyGoal=wg;P.target=tg;P.examDate=dt2;P.groups=gs;P.rest=Number(document.getElementById('st-rest').value);
+    P.name=nm;P.dailyHours=h2;P.weeklyGoal=wg;P.target=tg;P.groups=gs;
+    var ic2=icaiStart(P.level,gs,aLabel(aIdx(parse(dt2))));P.dateAuto=(dt2===ic2)||(!ic2&&dt2===iso(aDate(aIdx(parse(dt2)))));P.examDate=dt2;P.rest=Number(document.getElementById('st-rest').value);
     commit();toast('Settings saved');return;
   }
   if(a==='export'){
@@ -1264,7 +1591,9 @@ function startOnb(){
 function chg(k,d,el){
   var P=cur();
   if(k==='prof'){S.active=el.value;ui.res=null;ui.modal=null;save();render();return;}
-  if(k==='onattempt'){if(ui.onb){ui.onb.idx=Number(el.value);ui.onb.date=iso(aDate(ui.onb.idx));render();}return;}
+  if(k==='aimode'){var a9=ui.ai;a9.q=readv('ai-q');a9.mat=readv('ai-mat')||a9.mat;var cx9=document.getElementById('ai-ctx');if(cx9)a9.ctx=cx9.checked;a9.mode=el.value;render();return;}
+  if(k==='tmpaper'){ui.tm=ui.tm||{};ui.tm.k=el.value;render();return;}
+  if(k==='onattempt'){if(ui.onb){ui.onb.idx=Number(el.value);onbDate(ui.onb);render();}return;}
   if(k==='residx'){if(ui.res){ui.res.idx=Number(el.value);render();}return;}
   if(k==='importfile'){
     var f=el.files&&el.files[0];if(!f)return;
@@ -1309,7 +1638,9 @@ document.addEventListener('change',function(e){
   var t=e.target,d=t.dataset||{};
   if(d.ob&&ui.onb){
     ui.onb[d.ob]=t.type==='checkbox'?t.checked:t.value;
-    if(d.ob==='level'){ui.onb.g1=true;ui.onb.g2=false;render();}
+    if(d.ob==='level'){ui.onb.g1=true;ui.onb.g2=false;onbDate(ui.onb);render();}
+    else if(d.ob==='g1'||d.ob==='g2'){if(!ui.onb.g1&&!ui.onb.g2){ui.onb[d.ob]=true;}onbDate(ui.onb);render();}
+    else if(d.ob==='date'){ui.onb.auto=false;ui.onb.hasIcai=false;render();}
     return;
   }
   if(d.mk&&ui.res){ui.res.marks[d.mk]=t.value===''?undefined:Number(t.value);return;}
@@ -1321,7 +1652,9 @@ document.addEventListener('click',function(e){
 });
 
 initCloud();
-window.__so={cloud:cloud,SYL:SYL,S:function(){return S;},analyse:analyse,activeInfo:activeInfo,planInfo:planInfo,newProfile:newProfile,todayPlan:todayPlan,roadmap:roadmap,makeRevs:makeRevs,render:render,ui:ui,aIdx:aIdx,aLabel:aLabel,cur:cur,save:save};
+setInterval(function(){try{var ae=document.activeElement,tg=ae&&ae.tagName;if(ui.tab==='partner'&&cloud.user&&!document.hidden&&!ui.modal&&!/INPUT|TEXTAREA|SELECT/.test(tg||''))refreshPartner();}catch(e){}},60000);
+setInterval(function(){var e=document.getElementById('tm-el'),t=tmGet();if(e&&t)e.textContent=tmText(t);},500);
+window.__so={CAL:function(){return CAL;},SYLV:function(){return SYLVER;},icaiStart:icaiStart,applyRemote:applyRemote,applySyl:applySyl,sylDiff:sylDiff,weakChapters:weakChapters,weekText:weekText,icsText:icsText,streakDays:streakDays,normP:normP,onbDate:onbDate,tmSet:tmSet,cloud:cloud,SYL:SYL,S:function(){return S;},analyse:analyse,activeInfo:activeInfo,planInfo:planInfo,newProfile:newProfile,todayPlan:todayPlan,roadmap:roadmap,makeRevs:makeRevs,render:render,ui:ui,aIdx:aIdx,aLabel:aLabel,cur:cur,save:save};
 render();
 })();
 
