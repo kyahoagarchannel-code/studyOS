@@ -1,0 +1,1319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CA StudyOS</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mut:#667085;--bd:#e4e7ee;--ac:#4f46e5;--ac2:#eef0ff;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
+[data-theme=dark]{--bg:#0f1220;--card:#181c2e;--tx:#eceefb;--mut:#9aa3c0;--bd:#2a3050;--ac:#8b86ff;--ac2:#232850;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+#app{max-width:900px;margin:0 auto;padding:12px 12px 90px}
+header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+header h1{font-size:18px;margin:0;flex:1}
+h2{font-size:16px;margin:18px 0 8px}
+h3{font-size:15px;margin:0 0 6px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.mut{color:var(--mut);font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp{justify-content:space-between}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
+.btn.sec{background:var(--ac2);color:var(--ac)}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:8px}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:9px;padding:8px 10px;max-width:100%}
+input[type=number]{width:90px}
+input[type=text],input[type=date],textarea{width:100%}
+textarea{min-height:70px;resize:vertical}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+.chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;background:var(--ac2);color:var(--ac)}
+.chip.ok{background:#16a34a22;color:var(--ok)}.chip.warn{background:#d9770622;color:var(--warn)}.chip.bad{background:#dc262622;color:var(--bad)}
+.bar{height:8px;border-radius:99px;background:var(--bd);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ac)}
+.blk{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--bd)}
+.blk:first-of-type{border-top:0}
+.blk .r{display:flex;gap:8px;align-items:center;white-space:nowrap}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);display:flex;justify-content:center;z-index:5}
+nav button{flex:1;max-width:150px;background:none;border:0;padding:10px 4px 12px;font:inherit;font-size:12px;color:var(--mut);cursor:pointer}
+nav button.on{color:var(--ac);font-weight:700}
+nav button b{display:block;font-size:18px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:top}
+.scroll{overflow-x:auto}
+.ov{position:fixed;inset:0;background:#0007;display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.modal{background:var(--card);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:16px;max-height:90vh;overflow:auto}
+@media(min-width:600px){.ov{align-items:center}.modal{border-radius:16px}}
+.toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#111;color:#fff;padding:9px 14px;border-radius:10px;z-index:30;font-size:14px;max-width:90%}
+.opt{display:flex;gap:10px;flex-wrap:wrap}
+.opt label{margin:0;border:1px solid var(--bd);border-radius:10px;padding:10px 12px;color:var(--tx);cursor:pointer;display:flex;gap:6px;align-items:center}
+.ch{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--bd)}
+.ch .nm{flex:1;min-width:120px}
+.warnbox{background:#d9770618;border:1px solid var(--warn);border-radius:10px;padding:10px;font-size:13px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+'use strict';
+
+/* ---------- course data (hours are editable estimates, not official) ---------- */
+var PAPERS={
+FD1:{n:'Accounting',h:110},
+FD2:{n:'Business Laws and Business Correspondence & Reporting',h:90},
+FD3:{n:'Business Mathematics, Logical Reasoning and Statistics',h:110},
+FD4:{n:'Business Economics and Business & Commercial Knowledge',h:90},
+IN1:{n:'Advanced Accounting',h:180},
+IN2:{n:'Corporate and Other Laws',h:130},
+IN3:{n:'Taxation',h:170},
+IN4:{n:'Cost and Management Accounting',h:150},
+IN5:{n:'Auditing and Ethics',h:120},
+IN6:{n:'Financial Management and Strategic Management',h:140},
+FN1:{n:'Financial Reporting',h:220},
+FN2:{n:'Advanced Financial Management',h:200},
+FN3:{n:'Advanced Auditing, Assurance and Professional Ethics',h:200},
+FN4:{n:'Direct Tax Laws and International Taxation',h:220},
+FN5:{n:'Indirect Tax Laws',h:180},
+FN6:{n:'Integrated Business Solutions',h:150}
+};
+var LEVELS={
+foundation:{name:'CA Foundation',exempt:false,groups:{ALL:{n:'All 4 papers',p:['FD1','FD2','FD3','FD4']}}},
+inter:{name:'CA Intermediate',exempt:true,groups:{G1:{n:'Group 1',p:['IN1','IN2','IN3']},G2:{n:'Group 2',p:['IN4','IN5','IN6']}}},
+final:{name:'CA Final',exempt:true,groups:{G1:{n:'Group 1',p:['FN1','FN2','FN3','FN4']},G2:{n:'Group 2',p:['FN5','FN6']}}}
+};
+/* Starter chapter catalogue. Compiled Oct 2026 from public sources (Physics Wallah, Careers360, CA Test Series).
+   NOT an official ICAI document: names/order can differ from your study material. */
+var SYL_NOTE='Starter chapter list compiled in Oct 2026 from public sources (Physics Wallah, Careers360, CA Test Series). It is not an official ICAI document. Check it against the ICAI syllabus and your study material.';
+var SYL={
+FD1:['Theoretical Framework','Accounting Process','Bank Reconciliation Statement','Inventories','Concept and Accounting of Depreciation','Accounting for Special Transactions (incl. Bills of Exchange)','Final Accounts of Sole Proprietors','Partnership Accounts','Financial Statements of Not-for-Profit Organisations','Introduction to Company Accounts'],
+FD2:['Business Laws – The Indian Contract Act, 1872','Business Laws – The Sale of Goods Act, 1930','Business Laws – The Indian Partnership Act, 1932','Business Laws – The Limited Liability Partnership Act, 2008','Business Laws – The Companies Act, 2013','Business Correspondence – Communication','Business Correspondence – Sentence Types and Vocabulary','Business Correspondence – Comprehension Passage and Note-Making','Business Correspondence – Précis, Article, Report, Formal Letters and Mails, Résumé, Meetings'],
+FD3:['Business Maths – Ratio and Proportion, Indices and Logarithms','Business Maths – Equations and Matrices','Business Maths – Linear Inequalities','Business Maths – Time Value of Money','Business Maths – Permutations and Combinations','Business Maths – Sequence and Series','Business Maths – Sets, Relations and Functions','Business Maths – Basic Applications of Differential and Integral Calculus','Logical Reasoning – Number Series, Coding-Decoding, Odd Man Out','Logical Reasoning – Direction Tests','Logical Reasoning – Seating Arrangements','Logical Reasoning – Blood Relations','Logical Reasoning – Syllogism','Statistics – Statistical Representation of Data','Statistics – Measures of Central Tendency and Dispersion','Statistics – Probability','Statistics – Theoretical Distributions','Statistics – Correlation and Regression','Statistics – Index Numbers and Time Series'],
+FD4:['Economics – Introduction to Business Economics','Economics – Theory of Demand and Supply','Economics – Theory of Production and Cost','Economics – Price Determination in Different Markets','Economics – Business Cycles','BCK – Introduction to Business','BCK – Business Environment','BCK – Business Organizations','BCK – Government Policies for Business Growth','BCK – Organizations Facilitating Business','BCK – Common Business Terminologies'],
+IN1:['Introduction to Accounting Standards','Framework for Preparation and Presentation of Financial Statements','Applicability of Accounting Standards','Presentation & Disclosures Based Accounting Standards','Assets Based Accounting Standards','Liabilities Based Accounting Standards','Accounting Standards Based on Items Impacting Financial Statements'],
+IN2:['Company Law – Preliminary','Company Law – Incorporation of Company and Matters Incidental Thereto','Company Law – Prospectus and Allotment of Securities','Company Law – Share Capital and Debentures','Company Law – Acceptance of Deposits by Companies','Company Law – Registration of Charges','Company Law – Management & Administration','Company Law – Declaration and Payment of Dividend','Company Law – Accounts of Companies','Company Law – Audit and Auditors','Company Law – Companies Incorporated Outside India','LLP – The Limited Liability Partnership Act, 2008','Other Laws – The General Clauses Act, 1897','Other Laws – Interpretation of Statutes','Other Laws – The Foreign Exchange Management Act, 1999'],
+IN3:['Income Tax – Basic Concepts','Income Tax – Residence and Scope of Total Income','Income Tax – Heads of Income: Salaries','Income Tax – Heads of Income: House Property','Income Tax – Heads of Income: Profits and Gains of Business or Profession','Income Tax – Heads of Income: Capital Gains','Income Tax – Heads of Income: Other Sources','Income Tax – Income of Other Persons Included in Assessee\'s Total Income','Income Tax – Aggregation of Income, Set-Off & Carry Forward of Losses','Income Tax – Deductions from Gross Total Income','Income Tax – Advance Tax, TDS & TCS','Income Tax – Filing of Return of Income & Self-Assessment','Income Tax – Income Tax Liability: Computation & Optimisation','GST – GST in India: An Introduction','GST – Supply under GST','GST – Charge of GST','GST – Place of Supply','GST – Exemptions from GST','GST – Time of Supply','GST – Value of Supply','GST – Input Tax Credit','GST – Registration','GST – Tax Invoice; Credit and Debit Notes','GST – Accounts and Records','GST – E-Way Bill','GST – Payment of Tax','GST – TDS and TCS under GST','GST – Returns'],
+IN4:['Introduction to Cost and Management Accounting','Material Cost','Employee Cost and Direct Expenses','Overheads – Absorption Costing Method','Activity Based Costing','Cost Sheet','Cost Accounting Systems','Unit & Batch Costing','Job Costing','Process & Operation Costing','Joint Products and By Products','Service Costing','Standard Costing','Marginal Costing','Budgets and Budgetary Control'],
+IN5:['Nature, Objective and Scope of Audit','Audit Strategy, Audit Planning and Audit Programme','Risk Assessment and Internal Control','Audit Evidence','Audit of Items of Financial Statements','Audit Documentation','Completion and Review','Audit Report','Special Features of Audit of Different Type of Entities','Audit of Banks','Ethics and Terms of Audit Engagements'],
+IN6:['FM – Scope and Objectives of Financial Management','FM – Types of Financing','FM – Financial Analysis and Planning: Ratio Analysis','FM – Cost of Capital','FM – Financing Decisions: Capital Structure','FM – Financing Decisions: Leverages','FM – Investment Decisions','FM – Dividend Decision','FM – Management of Working Capital','SM – Introduction to Strategic Management','SM – Strategic Analysis: External Environment','SM – Strategic Analysis: Internal Environment','SM – Strategic Choices','SM – Strategy Implementation and Evaluation'],
+FN1:['Introduction to Indian Accounting Standards','Conceptual Framework for Financial Reporting under Ind AS','Ind AS on Presentation of General Purpose Financial Statements','Ind AS on Measurement based on Accounting Policies','Ind AS on Assets of the Financial Statements','Ind AS on Liabilities of the Financial Statements','Ind AS on Items impacting the Financial Statements','Ind AS on Disclosures in the Financial Statements','Ind AS 115 Revenue from Contracts with Customers','Other Indian Accounting Standards','Accounting and Reporting of Financial Instruments','Ind AS 103 Business Combinations','Consolidated and Separate Financial Statements of Group Entities','Ind AS 101 First-time Adoption of Ind AS','Analysis of Financial Statements','Professional and Ethical Duty of a Chartered Accountant','Accounting and Technology'],
+FN2:['Financial Policy and Corporate Strategy','Risk Management','Advanced Capital Budgeting Decisions','Security Analysis','Security Valuation','Portfolio Management','Securitization','Mutual Funds','Derivatives Analysis and Valuation','Foreign Exchange Exposure and Risk Management','International Financial Management','Interest Rate Risk Management','Business Valuation','Mergers, Acquisitions and Corporate Restructuring','Startup Finance'],
+FN3:['Quality Control','General Auditing Principles and Auditors Responsibilities','Audit Planning, Strategy and Execution','Materiality, Risk Assessment and Internal Control','Audit Evidence','Completion and Review','Reporting','Specialised Areas','Related Services','Review of Financial Information','Prospective Financial Information and Other Assurance Services','Digital Auditing & Assurance','Group Audits','Special Features of Audit of Banks & Non-Banking Financial Companies','Overview of Audit of Public Sector Undertakings','Internal Audit','Due Diligence, Investigation & Forensic Accounting','SDG & ESG Assurance','Professional Ethics & Liabilities of Auditors'],
+FN4:['Basic Concepts','Incomes which do not form part of Total Income','Profits and Gains of Business or Profession','Capital Gains','Income from Other Sources','Income of Other Persons included in Assessee\'s Total Income','Aggregation of Income, Set Off or Carry Forward of Losses','Deductions from Gross Total Income','Assessment of Various Entities','Assessment of Trusts and Institutions, Political Parties and Other Special Entities','Tax Planning, Tax Avoidance and Tax Evasion','Taxation of Digital Transactions','Deduction, Collection and Recovery of Tax','Income Tax Authorities','Assessment Procedure','Appeals and Revision','Dispute Resolution','Miscellaneous Provisions','Provisions to Counteract Unethical Tax Practices','Tax Audit and Ethical Compliance','International Tax – Non-Resident Taxation','International Tax – Double Taxation Relief','International Tax – Advance Rulings','International Tax – Transfer Pricing','International Tax – Fundamentals of BEPS','International Tax – Application and Interpretation of Tax Treaties','International Tax – Overview of Model Tax Conventions','International Tax – Latest Developments in International Taxation'],
+FN5:['GST – Supply under GST','GST – Charge of GST','GST – Place of Supply','GST – Exemptions from GST','GST – Time of Supply','GST – Value of Supply','GST – Input Tax Credit','GST – Registration','GST – Tax Invoice, Credit and Debit Notes','GST – Accounts and Records; E-way Bill','GST – Payment of Tax','GST – Electronic Commerce Transactions','GST – Returns','GST – Import and Export under GST','GST – Refunds','GST – Job Work','GST – Assessment and Audit','GST – Inspection, Search, Seizure and Arrest','GST – Demands and Recovery','GST – Liability to Pay in Certain Cases','GST – Offences and Penalties and Ethical Aspects','GST – Appeals and Revision','GST – Advance Ruling','GST – Miscellaneous Provisions','Customs – Levy of and Exemptions from Customs Duty','Customs – Types of Duty','Customs – Classification of Imported and Export Goods','Customs – Valuation under the Customs Act, 1962','Customs – Importation and Exportation of Goods','Customs – Warehousing','Customs – Refund','Customs – Foreign Trade Policy'],
+FN6:[]
+};
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var DAYN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var KEY='ca_studyos_v1',TKEY='ca_studyos_theme';
+
+/* ---------- helpers ---------- */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function uid(){return Math.random().toString(36).slice(2,9);}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x));}
+function r1(x){return Math.round(x*10)/10;}
+function pad(n){return (n<10?'0':'')+n;}
+function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function parse(s){var a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2],12,0,0);}
+function today(){var d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate(),12,0,0);}
+function addDays(d,n){var x=new Date(d.getTime());x.setDate(x.getDate()+n);return x;}
+function diff(a,b){return Math.round((b-a)/864e5);}
+function fmt(d){return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear();}
+function fmtMin(m){var h=Math.floor(m/60),x=m%60;return (h?h+'h ':'')+(x||!h?x+'m':'');}
+function slot(m){return m<=2?0:(m<=6?1:2);}
+function aIdx(d){return d.getFullYear()*3+slot(d.getMonth());}
+function aLabel(i){return ['Jan','May','Sep'][i%3]+' '+Math.floor(i/3);}
+function aDate(i){return new Date(Math.floor(i/3),[0,4,8][i%3],15,12,0,0);}
+function plab(k){return 'P'+k.slice(2);}
+function pfull(k){return plab(k)+' '+PAPERS[k].n;}
+function weekStart(d){return addDays(d,-((d.getDay()+6)%7));}
+
+/* ---------- storage ---------- */
+var storageOK=true;
+function load(){
+  try{var r=localStorage.getItem(KEY);if(r){var o=JSON.parse(r);if(o&&o.profiles)return o;}}catch(e){storageOK=false;}
+  return {v:1,active:null,profiles:[]};
+}
+var S=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){storageOK=false;}}
+function theme(){
+  var t=null;try{t=localStorage.getItem(TKEY);}catch(e){}
+  if(t)return t;
+  return (window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';
+}
+function cur(){for(var i=0;i<S.profiles.length;i++)if(S.profiles[i].id===S.active)return S.profiles[i];return S.profiles[0]||null;}
+
+/* ---------- profile ---------- */
+
+var SUB={
+'Presentation & Disclosures Based Accounting Standards':['AS 1 Disclosure of Accounting Policies','AS 3 Cash Flow Statements','AS 17 Segment Reporting','AS 18 Related Party Disclosures','AS 24 Discontinuing Operations'],
+'Assets Based Accounting Standards':['AS 2 Valuation of Inventories','AS 10 Property, Plant and Equipment','AS 13 Accounting for Investments','AS 16 Borrowing Costs','AS 19 Leases','AS 26 Intangible Assets'],
+'Liabilities Based Accounting Standards':['AS 15 Employee Benefits','AS 29 Provisions, Contingent Liabilities and Contingent Assets'],
+'Accounting Standards Based on Items Impacting Financial Statements':['AS 4 Contingencies and Events after the Balance Sheet Date','AS 5 Net Profit or Loss, Prior Period Items and Changes in Accounting Policies','AS 11 Effects of Changes in Foreign Exchange Rates','AS 12 Government Grants','AS 14 Accounting for Amalgamations','AS 20 Earnings Per Share','AS 22 Taxes on Income'],
+'Business Laws – The Indian Contract Act, 1872':['Unit 1 Nature of Contract and its Essentials','Unit 2 Consideration','Unit 3 Other Essential Elements of a Valid Contract','Unit 4 Performance of Contract','Unit 5 Breach of Contract and its Remedies','Unit 6 Contingent and Quasi Contracts','Unit 7 Contract of Indemnity and Guarantee','Unit 8 Contract of Bailment and Pledge','Unit 9 Contract of Agency'],
+'Business Laws – The Sale of Goods Act, 1930':['Unit 1 Formation of the Contract of Sale','Unit 2 Conditions and Warranties','Unit 3 Transfer of Property','Unit 4 Performance of the Contract of Sale','Unit 5 Rights of an Unpaid Seller','Unit 6 Remedies for Breach'],
+'Business Laws – The Indian Partnership Act, 1932':['Unit 1 Nature of Partnership','Unit 2 Relations of Partners to One Another','Unit 3 Relations of Partners with Third Parties','Unit 4 Admission, Retirement and Expulsion','Unit 5 Dissolution of Firm','Unit 6 Registration of Firms']
+};
+function mkCh(grp,unit,status){return {id:uid(),name:grp+' › '+unit,grp:grp,unit:unit,status:status||'todo',conf:3,revs:[]};}
+function expandStd(nm){return SUB[nm]?SUB[nm].map(function(u){return mkCh(nm,u);}):[{id:uid(),name:nm,status:'todo',conf:3,revs:[]}];}
+function grpOf(c){if(c.grp)return c.grp;var i=c.name.indexOf(' – ');return i>0?c.name.slice(0,i):'';}
+function lblOf(c){if(c.unit)return c.unit;var i=c.name.indexOf(' – ');return i>0?c.name.slice(i+3):c.name;}
+function starter(k){var o=[];(SYL[k]||[]).forEach(function(n){o=o.concat(expandStd(n));});return o;}
+function newProfile(o){
+  var L=LEVELS[o.level],papers={};
+  Object.keys(L.groups).forEach(function(g){L.groups[g].p.forEach(function(k){papers[k]={h:PAPERS[k].h,focus:false,conf:3,ch:starter(k)};});});
+  return {id:uid(),name:o.name||'Student',level:o.level,groups:o.groups,examDate:o.examDate,dailyHours:o.dailyHours,
+    weeklyGoal:Math.round(o.dailyHours*6),target:50,rest:o.rest,planStart:iso(today()),papers:papers,attempts:[],sessions:[],mocks:[],created:iso(today())};
+}
+
+/* ---------- results analysis + exemption ---------- */
+function analyse(P){
+  var L=LEVELS[P.level];
+  var att=P.attempts.slice().sort(function(a,b){return a.date<b.date?-1:(a.date>b.date?1:0);});
+  var ex={},passed={},rows=[];
+  att.forEach(function(a){
+    var idx=aIdx(parse(a.date)),row={a:a,groups:[]};
+    Object.keys(L.groups).forEach(function(g){
+      if(passed[g])return;
+      var G=L.groups[g],eff={},real=0,miss=[];
+      G.p.forEach(function(k){
+        var m=a.marks[k];
+        if(typeof m==='number'&&!isNaN(m)){eff[k]=m;real++;}
+        else if(ex[k]&&ex[k].exp>=idx){eff[k]=ex[k].mark;}
+        else miss.push(k);
+      });
+      if(!real)return;
+      var sum=0,low=[];
+      G.p.forEach(function(k){if(eff[k]!==undefined){sum+=eff[k];if(eff[k]<40)low.push(k);}});
+      var max=G.p.length*100;
+      var pass=miss.length===0&&low.length===0&&sum>=max*0.5;
+      var gr={g:g,n:G.n,pass:pass,sum:sum,max:max,miss:miss,low:low,aggFail:miss.length===0&&sum<max*0.5,newEx:[]};
+      if(pass){passed[g]={label:a.label,idx:idx};}
+      else if(miss.length===0&&L.exempt){
+        G.p.forEach(function(k){
+          var m=a.marks[k];
+          if(typeof m==='number'&&m>=60&&!(ex[k]&&ex[k].exp>=idx)){ex[k]={mark:m,exp:idx+3,from:a.label};gr.newEx.push(k);}
+        });
+      }
+      row.groups.push(gr);
+    });
+    rows.push(row);
+  });
+  return {rows:rows,ex:ex,passed:passed};
+}
+function activeInfo(P,A){
+  var L=LEVELS[P.level],tIdx=aIdx(parse(P.examDate)),groups=[],study=[],exempt=[];
+  P.groups.forEach(function(g){
+    var G=L.groups[g];if(!G)return;
+    if(A.passed[g]){groups.push({g:g,n:G.n,p:G.p,passed:A.passed[g].label});return;}
+    var exs=G.p.filter(function(k){return A.ex[k]&&A.ex[k].exp>=tIdx;});
+    var rest=G.p.filter(function(k){return exs.indexOf(k)<0;});
+    var sumEx=exs.reduce(function(s,k){return s+A.ex[k].mark;},0);
+    var need=Math.max(rest.length*40,G.p.length*50-sumEx);
+    groups.push({g:g,n:G.n,p:G.p,exs:exs,rest:rest,need:need,avg:rest.length?need/rest.length:0});
+    exempt=exempt.concat(exs);study=study.concat(rest);
+  });
+  return {groups:groups,study:study,exempt:exempt,tIdx:tIdx};
+}
+
+/* ---------- scores, hours, weakness ---------- */
+function lastScore(P,k){
+  var best=null;
+  P.attempts.forEach(function(a){var m=a.marks[k];if(typeof m==='number'&&(!best||a.date>=best.d))best={d:a.date,v:m};});
+  P.mocks.forEach(function(m){if(m.paper===k&&m.max>0){var v=m.score/m.max*100;if(!best||m.date>=best.d)best={d:m.date,v:v};}});
+  return best?best.v:null;
+}
+function weak(P,k){var v=lastScore(P,k);if(v===null)return 0.3;return clamp((P.target-v)/P.target,0,1);}
+function hoursDone(P,k){return P.sessions.filter(function(s){return s.paper===k&&s.date>=P.planStart;}).reduce(function(t,s){return t+s.min;},0)/60;}
+function remH(P,k){return Math.max(0,P.papers[k].h-hoursDone(P,k));}
+
+/* ---------- plan engine ---------- */
+function planInfo(P,A,X){
+  var t=today(),ex=parse(P.examDate),days=diff(t,ex);
+  var dd=Math.max(days,0);
+  var revDays=dd>45?Math.max(20,Math.round(dd*0.25)):Math.round(dd*0.4);
+  var mockDays=Math.min(15,Math.round(dd*0.15));
+  var phase=days<0?'over':(days<=mockDays?'mock':(days<=revDays?'revise':'learn'));
+  var learnLeft=Math.max(0,days-revDays);
+  var rem=X.study.reduce(function(s,k){return s+remH(P,k);},0);
+  var avail=learnLeft*(P.rest>=0?6/7:1);
+  var need=avail>0?rem/avail:(rem>0?Infinity:0);
+  var status=rem===0?'done':(need<=P.dailyHours*0.95?'ontrack':(need<=P.dailyHours*1.2?'tight':'behind'));
+  return {t:t,ex:ex,days:days,revDays:revDays,mockDays:mockDays,phase:phase,learnLeft:learnLeft,rem:rem,need:need,status:status};
+}
+function weights(P,X,phase,remMap){
+  var w={};
+  X.study.forEach(function(k){
+    var wk=weak(P,k),f=P.papers[k].focus,r=remMap?remMap[k]:remH(P,k);
+    if(phase==='learn')w[k]=r>0?r*(1+wk*0.6+(f?0.5:0)):0;
+    else w[k]=(1+wk*1.5+(f?0.4:0))*(1+(r/Math.max(1,P.papers[k].h))*0.5);
+  });
+  return w;
+}
+function allocate(total,w){
+  var ks=Object.keys(w).filter(function(k){return w[k]>0;});
+  if(!ks.length||total<=0)return {};
+  var sum=ks.reduce(function(s,k){return s+w[k];},0),out={},used=0;
+  ks.forEach(function(k){out[k]=Math.floor(total*w[k]/sum/15)*15;used+=out[k];});
+  var left=total-used,order=ks.slice().sort(function(a,b){return w[b]-w[a];}),i=0;
+  while(left>=15){out[order[i%order.length]]+=15;left-=15;i++;}
+  ks.forEach(function(k){if(k!==order[0]&&out[k]>0&&out[k]<30){out[order[0]]+=out[k];out[k]=0;}});
+  return out;
+}
+function why(P,k,phase){
+  var r=[],lv=lastScore(P,k);
+  if(lv!==null)r.push('last score '+Math.round(lv)+'/100');
+  if(P.papers[k].focus)r.push('focus paper');
+  if(phase==='learn')r.push(Math.round(remH(P,k))+' hrs of syllabus left');
+  else r.push(phase==='mock'?'exam is close: practice and fix mistakes':'revision phase');
+  return r.join(' \u2022 ');
+}
+function revDue(P,t){
+  var out=[],ts=iso(t);
+  Object.keys(P.papers).forEach(function(k){P.papers[k].ch.forEach(function(c){(c.revs||[]).forEach(function(r){if(!r.done&&r.due<=ts)out.push({k:k,c:c,r:r});});});});
+  return out.sort(function(a,b){return a.r.due<b.r.due?-1:(a.r.due>b.r.due?1:0);});
+}
+function todayPlan(c){
+  var P=c.P,X=c.X,I=c.I,t=I.t,rv=revDue(P,t),blocks=[];
+  if(P.rest>=0&&t.getDay()===P.rest)return {rest:true,blocks:[],rv:rv};
+  var mins=Math.round(P.dailyHours*60);
+  if(!X.study.length||I.phase==='over')return {rest:false,blocks:[],rv:rv};
+  var revMin=Math.min(rv.length*20,Math.round(mins*0.35/5)*5);
+  if(rv.length&&revMin>0){
+    var by={};rv.forEach(function(x){by[x.k]=(by[x.k]||0)+1;});
+    var scale=revMin/(rv.length*20);
+    Object.keys(by).forEach(function(k){
+      var m=Math.max(10,Math.round(by[k]*20*scale/5)*5);
+      blocks.push({k:k,type:'Revision',min:m,reason:by[k]+' chapter(s) due for spaced revision'});
+    });
+  }
+  var left=mins-blocks.reduce(function(s,b){return s+b.min;},0);
+  var w=weights(P,X,I.phase,null),phase=I.phase;
+  if(phase==='mock'&&left>=120&&Math.floor(t.getTime()/864e5)%2===0){
+    var top=Object.keys(w).sort(function(a,b){return w[b]-w[a];})[0];
+    var mm=Math.min(180,Math.round(left*0.6/15)*15);
+    blocks.push({k:top,type:'Timed mock / PYQ paper',min:mm,reason:'Write under exam conditions, then review every mistake'});
+    left-=mm;
+  }
+  var al=allocate(left,w);
+  Object.keys(al).filter(function(k){return al[k]>0;}).sort(function(a,b){return al[b]-al[a];}).forEach(function(k){
+    blocks.push({k:k,type:phase==='learn'?'Study':(phase==='mock'?'Practice / PYQs':'Revise + practice'),min:al[k],reason:why(P,k,phase)});
+  });
+  return {rest:false,blocks:blocks,rv:rv};
+}
+function roadmap(c){
+  var P=c.P,X=c.X,I=c.I,rem={},rows=[],doneOn=null;
+  X.study.forEach(function(k){rem[k]=remH(P,k);});
+  var d=I.t,wk=0;
+  while(diff(d,I.ex)>=0&&wk<90){
+    var end=addDays(d,6);if(end>I.ex)end=I.ex;
+    var pc={},sd=0;
+    for(var x=d;x<=end;x=addDays(x,1)){
+      var dl=diff(x,I.ex),ph=dl<=I.mockDays?'mock':(dl<=I.revDays?'revise':'learn');
+      pc[ph]=(pc[ph]||0)+1;
+      if(!(P.rest>=0&&x.getDay()===P.rest))sd++;
+    }
+    var ph2=Object.keys(pc).sort(function(a,b){return pc[b]-pc[a];})[0];
+    var hrs=sd*P.dailyHours,w=weights(P,X,ph2,rem),al=allocate(Math.round(hrs*60),w),out={};
+    Object.keys(al).forEach(function(k){
+      var m=ph2==='learn'?Math.min(al[k],Math.round(rem[k]*60)):al[k];
+      if(m>0){out[k]=m;rem[k]=Math.max(0,rem[k]-m/60);}
+    });
+    var tot=Object.keys(rem).reduce(function(s,k){return s+rem[k];},0);
+    if(doneOn===null&&tot<0.5)doneOn=end;
+    rows.push({n:wk+1,start:d,end:end,ph:ph2,hrs:hrs,alloc:out});
+    d=addDays(end,1);wk++;
+  }
+  return {rows:rows,doneOn:doneOn};
+}
+
+/* ---------- revisions ---------- */
+function makeRevs(conf,from,exam){
+  var base=[1,3,7,15,30],f=conf<=2?0.6:(conf>=4?1.3:1),out=[];
+  base.forEach(function(b){
+    var off=Math.max(1,Math.round(b*f)),dt=addDays(from,off);
+    if(diff(dt,exam)>=1)out.push({id:uid(),due:iso(dt),done:false});
+  });
+  return out;
+}
+
+/* ---------- cloud (Supabase): login, sync, partner ---------- */
+var CKEY='ca_studyos_cloud';
+var cloud={cfg:null,client:null,user:null,state:'off',msg:'',msgKind:'',busy:false,syncMsg:'',links:[],prefs:{},goals:[],progress:[],partner:null,lastProg:{},timer:null};
+try{cloud.cfg=JSON.parse(localStorage.getItem(CKEY)||'null');}catch(e){}
+function cmsg(m,kind){cloud.msg=m;cloud.msgKind=kind||'';}
+function keyRole(k){
+  try{var p=k.split('.');if(p.length===3){var j=JSON.parse(atob(p[1].replace(/-/g,'+').replace(/_/g,'/')));return j.role||'';}}catch(e){}
+  return '';
+}
+function validateCfg(url,key){
+  if(!/^https:\/\/[a-z0-9.-]+$/i.test(url))return 'The Project URL must start with https:// (example: https://abcdefgh.supabase.co)';
+  if(!key)return 'Paste the anon / publishable key';
+  if(/^sb_secret_/.test(key)||keyRole(key)==='service_role')return 'That is a SECRET key. Never put it in this app. Use the anon / publishable (public) key instead.';
+  return '';
+}
+function initCloud(){
+  cloud.client=null;cloud.user=null;
+  if(!cloud.cfg){cloud.state='off';return;}
+  if(!window.supabase||!window.supabase.createClient){cloud.state='nolib';return;}
+  try{
+    cloud.client=window.supabase.createClient(cloud.cfg.url,cloud.cfg.key);
+    cloud.state='out';
+    cloud.client.auth.getSession().then(function(r){
+      var s=r&&r.data&&r.data.session;
+      if(s&&!cloud.user){cloud.user=s.user;cloud.state='on';onSignedIn();}
+      render();
+    });
+    cloud.client.auth.onAuthStateChange(function(ev,session){
+      var was=cloud.user&&cloud.user.id;
+      cloud.user=session?session.user:null;
+      if(session){cloud.state='on';if(!was)onSignedIn();}
+      else{cloud.state='out';cloud.links=[];cloud.goals=[];cloud.progress=[];cloud.partner=null;cloud.lastProg={};}
+      render();
+    });
+  }catch(e){cloud.state='off';cmsg('Could not start the cloud: '+e.message,'bad');}
+}
+function onSignedIn(){syncAll().then(refreshPartner);}
+async function doAuth(mode,email,pw){
+  cmsg('Working…');render();
+  try{
+    var r=mode==='up'?await cloud.client.auth.signUp({email:email,password:pw}):await cloud.client.auth.signInWithPassword({email:email,password:pw});
+    if(r.error)throw r.error;
+    if(mode==='up'&&!(r.data&&r.data.session))cmsg('Account created. Open the confirmation email, then come back and press Sign in.','ok');
+    else cmsg('Signed in','ok');
+  }catch(e){cmsg((e&&e.message)||'Something went wrong','bad');}
+  render();
+}
+async function rpc(name,args){
+  if(!cloud.client||!cloud.user)throw new Error('Please sign in first');
+  var r=await cloud.client.rpc(name,args);
+  if(r.error)throw r.error;
+  return r.data;
+}
+function shareProfile(){
+  var id=S.shareId||S.active;
+  for(var i=0;i<S.profiles.length;i++)if(S.profiles[i].id===id)return S.profiles[i];
+  return cur();
+}
+function stripP(P){var o=JSON.parse(JSON.stringify(P));delete o.dirty;delete o.syncedAt;return o;}
+function schedSync(){
+  if(!cloud.client||!cloud.user)return;
+  clearTimeout(cloud.timer);
+  cloud.timer=setTimeout(function(){syncAll();},3000);
+}
+async function syncAll(){
+  if(!cloud.client||!cloud.user||cloud.busy)return;
+  cloud.busy=true;cloud.syncMsg='Syncing…';render();
+  try{
+    var r=await cloud.client.from('study_profiles').select('profile_id,data,updated_at');
+    if(r.error)throw r.error;
+    var remote={};
+    (r.data||[]).forEach(function(rr){
+      remote[rr.profile_id]=rr;
+      var loc=null;
+      for(var i=0;i<S.profiles.length;i++)if(S.profiles[i].id===rr.profile_id)loc=S.profiles[i];
+      var take=function(){
+        var d=rr.data;d.id=rr.profile_id;d.syncedAt=rr.updated_at;d.dirty=false;
+        if(loc)S.profiles[S.profiles.indexOf(loc)]=d;else S.profiles.push(d);
+      };
+      if(!loc){take();return;}
+      if(loc.syncedAt===rr.updated_at)return;
+      if(!loc.dirty){take();return;}
+      if(window.confirm('"'+loc.name+'" was changed on another device and also here.\n\nOK = use the cloud version\nCancel = keep this device\'s version (replaces the cloud copy)'))take();
+      else loc.syncedAt=rr.updated_at;
+    });
+    if(!S.active&&S.profiles[0])S.active=S.profiles[0].id;
+    for(var j=0;j<S.profiles.length;j++){
+      var P=S.profiles[j];
+      if(remote[P.id]&&!P.dirty&&P.syncedAt===remote[P.id].updated_at)continue;
+      if(remote[P.id]&&!P.dirty)continue;
+      var before=JSON.stringify(stripP(P));
+      var u=await cloud.client.from('study_profiles').upsert({user_id:cloud.user.id,profile_id:P.id,data:stripP(P)},{onConflict:'user_id,profile_id'}).select('updated_at').single();
+      if(u.error)throw u.error;
+      P.syncedAt=u.data.updated_at;
+      if(JSON.stringify(stripP(P))===before)P.dirty=false;
+    }
+    save();
+    var stamp=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),warn='';
+    try{await pushSummary();await updateMyProgress();}
+    catch(e2){warn=' (partner summary not updated: '+((e2&&e2.message)||'error')+')';}
+    cloud.syncMsg='Synced '+stamp+warn;
+  }catch(e){cloud.syncMsg='Not synced: '+((e&&e.message)?e.message:'offline')+' (will retry)';}
+  cloud.busy=false;render();
+}
+async function pushSummary(){
+  var P=shareProfile();if(!P||!cloud.client||!cloud.user)return;
+  var res=await cloud.client.from('my_summary').upsert({user_id:cloud.user.id,data:buildSummary(P)},{onConflict:'user_id'});
+  if(res.error)throw res.error;
+}
+function myGoalValue(P,g){
+  if(g.kind==='hours'){
+    var m=P.sessions.filter(function(s){return s.date>=g.start_date&&s.date<=g.end_date;}).reduce(function(t,s){return t+s.min;},0);
+    return r1(m/60);
+  }
+  if(g.kind==='chapters'){
+    var n=0;
+    Object.keys(P.papers).forEach(function(k){P.papers[k].ch.forEach(function(c){if(c.status==='done'&&c.doneOn&&c.doneOn>=g.start_date&&c.doneOn<=g.end_date)n++;});});
+    return n;
+  }
+  return null;
+}
+async function updateMyProgress(){
+  var P=shareProfile();if(!P||!cloud.client||!cloud.user)return;
+  var gr=await cloud.client.from('shared_goals').select('*').eq('status','active');
+  if(gr.error)return;
+  var gs=gr.data||[];
+  for(var i=0;i<gs.length;i++){
+    var g=gs[i],v=myGoalValue(P,g);
+    if(v===null||cloud.lastProg[g.id]===v)continue;
+    var u=await cloud.client.from('goal_progress').upsert({goal_id:g.id,user_id:cloud.user.id,value:v},{onConflict:'goal_id,user_id'});
+    if(!u.error)cloud.lastProg[g.id]=v;
+  }
+}
+async function refreshPartner(){
+  if(!cloud.client||!cloud.user)return;
+  try{
+    var l=await cloud.client.from('partner_links').select('*').order('created_at',{ascending:false});
+    if(l.error)throw l.error;
+    cloud.links=l.data||[];
+    var pr=await cloud.client.from('share_prefs').select('*');cloud.prefs={};
+    (pr.data||[]).forEach(function(x){cloud.prefs[x.link_id]=x;});
+    var g=await cloud.client.from('shared_goals').select('*').eq('status','active').order('created_at',{ascending:false});
+    cloud.goals=g.data||[];
+    var gp=await cloud.client.from('goal_progress').select('*');
+    cloud.progress=gp.data||[];
+  }catch(e){toast((e&&e.message)||'Could not load partner data');}
+  render();
+}
+
+/* what a partner MAY see (the database filters it again by your switches). Notes, mistakes, pending work are never included. */
+function buildSummary(P){
+  var A=analyse(P),X=activeInfo(P,A),I=planInfo(P,A,X),t=today(),ts=iso(t);
+  var papers=[];X.groups.forEach(function(g){if(!g.passed)papers=papers.concat(g.p);});
+  var subj=[],chap=[],hd=0,hn=0,cd=0,ct=0;
+  papers.forEach(function(k){
+    var p=P.papers[k],h=hoursDone(P,k),done=p.ch.filter(function(x){return x.status==='done';});
+    subj.push({paper:plab(k),name:PAPERS[k].n,hoursDone:r1(h),hoursNeeded:p.h,chaptersDone:done.length,chaptersTotal:p.ch.length});
+    chap.push({paper:plab(k),name:PAPERS[k].n,total:p.ch.length,learning:p.ch.filter(function(x){return x.status==='learning';}).length,done:done.map(function(x){return x.name;})});
+    hd+=Math.min(h,p.h);hn+=p.h;cd+=done.length;ct+=p.ch.length;
+  });
+  var mins=function(from,to){return sessMins(P,from,to);};
+  var ws=weekStart(t),days={};
+  P.sessions.forEach(function(s){days[s.date]=(days[s.date]||0)+s.min;});
+  var streak=0,d=t;if(!days[iso(d)])d=addDays(d,-1);
+  while(days[iso(d)]>0){streak++;d=addDays(d,-1);}
+  var l7=0,ds=0;for(var i=0;i<7;i++){var m=days[iso(addDays(t,-i))]||0;l7+=m;if(m>0)ds++;}
+  var tot=P.sessions.reduce(function(a,s){return a+s.min;},0);
+  var due=revDue(P,t).length,comp=0,sched=0,lim=iso(addDays(t,7)),from7=iso(addDays(t,-6));
+  Object.keys(P.papers).forEach(function(k){P.papers[k].ch.forEach(function(c){(c.revs||[]).forEach(function(r){
+    if(r.done&&r.doneOn&&r.doneOn>=from7)comp++;
+    if(!r.done&&r.due>ts&&r.due<=lim)sched++;
+  });});});
+  return {
+    name:P.name,
+    overall:{level:LEVELS[P.level].name,exam:aLabel(aIdx(I.ex)),daysLeft:I.days,phase:I.phase,syllabusHoursPct:hn?Math.round(hd/hn*100):0,chaptersDone:cd,chaptersTotal:ct},
+    subjects:subj,
+    chapters:chap,
+    goals:{dailyGoalH:P.dailyHours,weeklyGoalH:P.weeklyGoal,todayHours:r1(mins(t,t)/60),weekHours:r1(mins(ws,addDays(ws,6))/60),targetMark:P.target},
+    study_time:{last7Hours:r1(l7/60),daysStudiedLast7:ds,streakDays:streak,totalHours:r1(tot/60)},
+    tests:{attempts:P.attempts.map(function(a){var m={};Object.keys(a.marks).forEach(function(k){m[plab(k)]=a.marks[k];});return {label:a.label,marks:m};}),
+           mocks:P.mocks.slice(-10).map(function(x){return {paper:plab(x.paper),pct:x.max>0?Math.round(x.score/x.max*100):0,date:x.date};})},
+    revisions:{dueNow:due,completedLast7:comp,scheduledNext7:sched}
+  };
+}
+function fmtTs(s){try{return new Date(s).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});}catch(e){return '';}}
+
+/* ---------- UI state ---------- */
+var ui={open:{},tab:'today',modal:null,onb:null,res:null,toast:'',showAll:false};
+var tabs=[['today','\u2600','Today'],['papers','\ud83d\udcda','Papers'],['results','\ud83c\udfaf','Results'],['plan','\ud83d\uddfa','Plan'],['log','\ud83d\udcdd','Log'],['ai','\u2728','AI'],['partner','\ud83e\udd1d','Partner'],['settings','\u2699','Settings']];
+
+function toast(m){
+  ui.toast=m;var old=document.querySelector('.toast');if(old)old.remove();
+  var d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);
+  setTimeout(function(){if(d.parentNode)d.remove();},2600);
+}
+function commit(){var P=cur();if(P)P.dirty=true;save();render();schedSync();}
+
+/* ---------- views ---------- */
+function head(P){
+  var opts=S.profiles.map(function(p){return '<option value="'+p.id+'"'+(P&&p.id===P.id?' selected':'')+'>'+esc(p.name)+' \u2022 '+esc(LEVELS[p.level].name)+'</option>';}).join('');
+  return '<header><h1>CA StudyOS</h1>'+(S.profiles.length?'<select data-chg="prof">'+opts+'</select>':'')+
+    '<button class="btn sec sm" data-act="newprof" title="Add profile">\uff0b</button>'+
+    '<button class="btn sec sm" data-act="theme" title="Theme">\u25d0</button></header>'+
+    cloudBadge()+(storageOK?'':'<div class="warnbox">Your browser is blocking saving. Data will be lost when you close this page. Use Settings \u2192 Export backup often.</div>');
+}
+function nav(){
+  return '<nav>'+tabs.map(function(t){return '<button class="'+(ui.tab===t[0]?'on':'')+'" data-act="tab" data-t="'+t[0]+'"><b>'+t[1]+'</b>'+t[2]+'</button>';}).join('')+'</nav>';
+}
+function nextAttemptOptions(sel){
+  var base=aIdx(today()),o='';
+  for(var i=base;i<=base+8;i++)o+='<option value="'+i+'"'+(i===sel?' selected':'')+'>'+aLabel(i)+'</option>';
+  return o;
+}
+function defaultAttemptIdx(){var i=aIdx(today());while(diff(today(),aDate(i))<30)i++;return i;}
+
+function viewOnboard(){
+  var o=ui.onb;
+  if(!o){var idx=defaultAttemptIdx();o=ui.onb={name:'',level:'inter',g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};}
+  var L=LEVELS[o.level];
+  var lv=Object.keys(LEVELS).map(function(k){return '<label style="color:var(--tx)"><input type="radio" name="lv" data-ob="level" value="'+k+'"'+(o.level===k?' checked':'')+'> '+LEVELS[k].name+'</label>';}).join('');
+  var gr='';
+  if(o.level!=='foundation'){
+    gr='<label>Which group(s) are you preparing for?</label><div class="opt">'+
+      '<label style="color:var(--tx)"><input type="checkbox" data-ob="g1"'+(o.g1?' checked':'')+'> Group 1</label>'+
+      '<label style="color:var(--tx)"><input type="checkbox" data-ob="g2"'+(o.g2?' checked':'')+'> Group 2</label></div>';
+  }
+  var rest='<option value="-1"'+(o.rest==-1?' selected':'')+'>No rest day</option>'+DAYN.map(function(d,i){return '<option value="'+i+'"'+(o.rest==i?' selected':'')+'>'+d+'</option>';}).join('');
+  return '<div class="card"><h3>Create your plan</h3><div class="mut">Everything is saved only in this browser on this device. Your partner can open the same link on her own phone or laptop and make her own profile.</div>'+
+    '<label>Your name</label><input type="text" data-ob="name" value="'+esc(o.name)+'" placeholder="Name">'+
+    '<label>Level</label><div class="opt" data-lv>'+lv+'</div>'+gr+
+    '<label>Exam attempt you are preparing for</label><select data-chg="onattempt">'+nextAttemptOptions(o.idx)+'</select>'+
+    '<label>Exam start date (edit when ICAI announces the exact date)</label><input type="date" data-ob="date" value="'+esc(o.date)+'">'+
+    '<label>Study hours per day you can really give</label><input type="number" min="1" max="14" step="0.5" data-ob="hours" value="'+esc(o.hours)+'">'+
+    '<label>Weekly rest day</label><select data-ob="rest">'+rest+'</select>'+
+    '<div class="row" style="margin-top:14px"><button class="btn" data-act="createprof">Create my plan</button>'+(S.profiles.length?'<button class="btn sec" data-act="cancelonb">Cancel</button>':'')+'</div>'+
+    '<div class="mut" style="margin-top:10px">Already attempted an exam? Create the plan first, then enter your marks in <b>Results</b>. The app will adjust the plan.</div></div>';
+}
+
+function viewToday(c){
+  var P=c.P,X=c.X,I=c.I,T=todayPlan(c);
+  var stl={ontrack:['On track','ok'],tight:['Tight','warn'],behind:['Behind','bad'],done:['Syllabus hours covered','ok']}[I.status];
+  var phl={learn:'Learning phase',revise:'Revision phase',mock:'Mock and practice phase',over:'Exam date has passed'}[I.phase];
+  var html='<div class="card"><div class="row sp"><div><h3>Hi '+esc(P.name)+'</h3><div class="mut">'+(I.days>=0?I.days+' days to your '+aLabel(aIdx(I.ex))+' exam ('+fmt(I.ex)+')':'Your exam date ('+fmt(I.ex)+') has passed')+'</div></div><div><span class="chip">'+phl+'</span> '+(I.phase!=='over'&&X.study.length?'<span class="chip '+stl[1]+'">'+stl[0]+'</span>':'')+'</div></div>';
+  if(I.phase==='over'){
+    html+='<p>Add your result in <b>Results</b>, then press <b>Plan next attempt</b>.</p><button class="btn" data-act="tab" data-t="results">Go to Results</button>';
+  }else if(!X.study.length){
+    html+='<p>Nothing left to study for the selected group(s): they are passed or fully exempt. Change groups in Settings if you start another group.</p>';
+  }else if(I.phase==='learn'){
+    html+='<p style="margin:10px 0 0">New content needs about <b>'+(isFinite(I.need)?r1(I.need):'\u221e')+' h/day</b> until '+fmt(addDays(I.t,I.learnLeft))+' (then revision starts). You plan <b>'+P.dailyHours+' h/day</b>.</p>';
+    if(I.status==='behind')html+='<p class="mut">You are behind. Options: raise daily hours, use your rest day, or lower the hours for a paper you already know well (Papers tab).</p>';
+    else if(I.status==='tight')html+='<p class="mut">It is tight but possible. Missing days will push you behind, so protect your study time.</p>';
+  }else{
+    html+='<p style="margin:10px 0 0">Focus on revision, past papers and your weak chapters. Do not start big new topics now.</p>';
+  }
+  html+='</div>';
+  if(I.phase!=='over'){
+    html+='<h2>Today\u2019s plan</h2><div class="card">';
+    if(T.rest)html+='<div>Today is your rest day. Optional: 20 minutes of light revision.</div>';
+    else if(!T.blocks.length)html+='<div class="mut">No study blocks today.</div>';
+    else T.blocks.forEach(function(b){
+      html+='<div class="blk"><div><b>'+esc(pfull(b.k))+'</b><div class="mut">'+esc(b.type)+' \u2022 '+esc(b.reason)+'</div></div><div class="r"><b>'+fmtMin(b.min)+'</b><button class="btn sm" data-act="logblock" data-k="'+b.k+'" data-m="'+b.min+'">Done</button></div></div>';
+    });
+    html+='</div>';
+  }
+  if(I.phase!=='over'&&!T.rest){
+    var tk='',seen={};
+    T.blocks.forEach(function(b){
+      if(b.type!=='Study'||seen[b.k])return;seen[b.k]=1;
+      var nxt=P.papers[b.k].ch.filter(function(x){return x.status!=='done';}).slice(0,4);
+      if(!nxt.length)return;
+      tk+='<div class="mut" style="margin-top:8px">'+esc(pfull(b.k))+'</div>';
+      nxt.forEach(function(x){var g=grpOf(x);tk+='<div class="blk"><div>'+esc(lblOf(x))+(g&&x.unit?'<div class="mut" style="font-size:12px">'+esc(g)+'</div>':'')+'</div><div class="r"><button class="btn sm" data-act="tick" data-k="'+b.k+'" data-c="'+x.id+'">\u2713 Done</button></div></div>';});
+    });
+    if(tk)html+='<h2>Tick what you finished</h2><div class="card">'+tk+'<div class="mut" style="margin-top:8px">Each unit or accounting standard is ticked on its own. Ticking schedules its revisions.</div></div>';
+  }
+  html+='<h2>Revisions due</h2><div class="card">';
+  if(!T.rv.length)html+='<div class="mut">Nothing due. When you mark a chapter Done in Papers, revisions are scheduled automatically.</div>';
+  T.rv.slice(0,12).forEach(function(x){
+    html+='<div class="blk"><div><b>'+esc(x.c.name)+'</b><div class="mut">'+esc(pfull(x.k))+' \u2022 due '+fmt(parse(x.r.due))+'</div></div><div class="r"><button class="btn sm" data-act="revdone" data-k="'+x.k+'" data-c="'+x.c.id+'" data-r="'+x.r.id+'">Done</button><button class="btn sec sm" data-act="revhard" data-k="'+x.k+'" data-c="'+x.c.id+'" data-r="'+x.r.id+'">Hard</button></div></div>';
+  });
+  if(T.rv.length>12)html+='<div class="mut">+ '+(T.rv.length-12)+' more due</div>';
+  html+='</div>';
+  html+=goalsCard(P);
+  return html;
+}
+function sessMins(P,from,to){return P.sessions.filter(function(s){return s.date>=iso(from)&&s.date<=iso(to);}).reduce(function(t,s){return t+s.min;},0);}
+function goalsCard(P){
+  var t=today(),ws=weekStart(t),td=sessMins(P,t,t),wk=sessMins(P,ws,addDays(ws,6));
+  var dg=P.dailyHours*60,wg=P.weeklyGoal*60;
+  var h='<h2>Goals</h2><div class="card"><div class="row sp"><span>Today</span><span>'+fmtMin(td)+' / '+fmtMin(Math.round(dg))+'</span></div><div class="bar"><i style="width:'+clamp(td/dg*100,0,100)+'%"></i></div>'+
+    '<div class="row sp" style="margin-top:10px"><span>This week</span><span>'+fmtMin(wk)+' / '+fmtMin(Math.round(wg))+'</span></div><div class="bar"><i style="width:'+clamp(wk/wg*100,0,100)+'%"></i></div>';
+  var hist='';
+  for(var i=1;i<=6;i++){
+    var s=addDays(ws,-7*i),m=sessMins(P,s,addDays(s,6));
+    hist='<div style="text-align:center;flex:1"><div class="bar" style="height:44px;display:flex;align-items:flex-end;background:var(--bd)"><i style="width:100%;height:'+clamp(m/wg*100,0,100)+'%"></i></div><div class="mut" style="font-size:11px">'+(s.getDate())+' '+MON[s.getMonth()]+'<br>'+r1(m/60)+'h</div></div>'+hist;
+  }
+  h+='<div class="mut" style="margin:12px 0 4px">Last 6 weeks (hours logged vs weekly goal)</div><div class="row" style="flex-wrap:nowrap;align-items:flex-end">'+hist+'</div>';
+  var lw=sessMins(P,addDays(ws,-7),addDays(ws,-1));
+  if(P.sessions.length&&lw<wg*0.8)h+='<p class="mut" style="margin-bottom:0">Last week you logged '+r1(lw/60)+' h against a goal of '+P.weeklyGoal+' h. Recovery: add one extra block per day this week instead of one long catch-up day, or lower the goal to a number you can keep.</p>';
+  return h+'</div>';
+}
+
+function viewPapers(c){
+  var P=c.P,X=c.X,A=c.A,html='';
+  X.groups.forEach(function(G){
+    html+='<h2>'+esc(LEVELS[P.level].name)+' \u2022 '+esc(G.n)+(G.passed?' <span class="chip ok">Passed '+esc(G.passed)+'</span>':'')+'</h2>';
+    if(G.passed){html+='<div class="card mut">This group is passed. No need to study it again.</div>';return;}
+    G.p.forEach(function(k){
+      var p=P.papers[k],hd=hoursDone(P,k),pct=clamp(hd/Math.max(1,p.h)*100,0,100),exm=G.exs.indexOf(k)>=0;
+      var done=p.ch.filter(function(x){return x.status==='done';}).length;
+      html+='<div class="card"><div class="row sp"><h3>'+esc(pfull(k))+'</h3><span>'+(exm?'<span class="chip ok">Exempt till '+aLabel(A.ex[k].exp)+'</span>':'')+(p.focus?' <span class="chip">Focus</span>':'')+'</span></div>';
+      if(exm){html+='<div class="mut">Exempt with '+A.ex[k].mark+' marks (earned in '+esc(A.ex[k].from)+'). No study needed for this attempt.</div></div>';return;}
+      html+='<div class="row sp mut"><span>'+r1(hd)+' / '+p.h+' h done since plan start</span><span>'+Math.round(pct)+'%</span></div><div class="bar"><i style="width:'+pct+'%"></i></div>'+
+        '<div class="row" style="margin-top:10px"><span class="mut">Hours needed</span><input type="number" min="1" step="1" data-chg="hours" data-k="'+k+'" value="'+p.h+'">'+
+        '<label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--tx)"><input type="checkbox" data-chg="focus" data-k="'+k+'"'+(p.focus?' checked':'')+'> Focus paper</label></div>';
+      var lv=lastScore(P,k);
+      if(lv!==null)html+='<div class="mut" style="margin-top:6px">Last score: '+Math.round(lv)+'/100'+(lv<40?' (below 40, needs priority)':'')+'</div>';
+      var isOpen=!!ui.open[k];
+      html+='<div class="row sp" style="margin-top:10px"><span class="mut">Chapters: '+done+' / '+p.ch.length+' done</span><button class="btn sec sm" data-act="tgl" data-k="'+k+'">'+(isOpen?'Hide chapters':'Show chapters')+'</button></div>';
+      if(p.ch.length)html+='<div class="bar" style="margin-top:6px"><i style="width:'+(done/p.ch.length*100)+'%"></i></div>';
+      if(isOpen){
+        var lastG=null,gc={};
+        p.ch.forEach(function(x){var g=grpOf(x);if(!gc[g])gc[g]={n:0,d:0};gc[g].n++;if(x.status==='done')gc[g].d++;});
+        p.ch.forEach(function(ch){
+          var g=grpOf(ch);
+          if(g&&g!==lastG&&gc[g].n>1)html+='<div class="row sp" style="margin-top:12px"><b>'+esc(g)+'</b><span class="mut">'+gc[g].d+' / '+gc[g].n+' done</span></div>';
+          lastG=g;
+          var nx=(ch.revs||[]).filter(function(r){return !r.done;}).sort(function(a,b){return a.due<b.due?-1:1;})[0];
+          html+='<div class="ch" style="'+(g&&gc[g].n>1?'margin-left:10px':'')+'"><span class="nm">'+esc(gc[g]&&gc[g].n>1?lblOf(ch):ch.name)+(nx?'<div class="mut" style="font-size:12px">next revision '+fmt(parse(nx.due))+'</div>':'')+'</span>'+
+            '<select data-chg="chstatus" data-k="'+k+'" data-c="'+ch.id+'"><option value="todo"'+(ch.status==='todo'?' selected':'')+'>To do</option><option value="learning"'+(ch.status==='learning'?' selected':'')+'>Learning</option><option value="done"'+(ch.status==='done'?' selected':'')+'>Done</option></select>'+
+            '<select data-chg="chconf" data-k="'+k+'" data-c="'+ch.id+'" title="Confidence">'+[1,2,3,4,5].map(function(n){return '<option value="'+n+'"'+(ch.conf===n?' selected':'')+'>Conf '+n+'</option>';}).join('')+'</select>'+
+            (ch.unit?'':'<button class="btn sec sm" data-act="splitch" data-k="'+k+'" data-c="'+ch.id+'" title="Split this chapter into units">Units</button>')+
+            '<button class="btn danger sm" data-act="delch" data-k="'+k+'" data-c="'+ch.id+'">\u00d7</button></div>';
+        });
+        html+='<div class="row" style="margin-top:10px"><button class="btn sec sm" data-act="loadch" data-k="'+k+'">Load starter chapters</button></div>';
+        html+='<label>Add your own chapters (one per line)</label><textarea id="addch-'+k+'" placeholder="Chapter name"></textarea><div style="margin-top:6px"><button class="btn sec sm" data-act="addch" data-k="'+k+'">Add chapters</button></div>';
+      }
+      if(!p.ch.length&&!(SYL[k]||[]).length)html+='<div class="mut" style="margin-top:6px">This is a case-study paper with no fixed chapter list. Add your own practice sets if you want to track them.</div>';
+      html+='</div>';
+    });
+  });
+  html+='<div class="mut">Default hours are rough estimates: edit them to match your lecture hours. '+esc(SYL_NOTE)+' Final Paper 6 (Integrated Business Solutions) is a case-study paper with no fixed chapter list.</div>';
+  return html;
+}
+
+function groupVerdict(g){
+  if(g.pass)return '<span class="chip ok">Passed</span> '+g.n+': '+r1(g.sum)+'/'+g.max;
+  var why=[];
+  if(g.miss.length)why.push('absent in '+g.miss.map(plab).join(', ')+' (no exemption possible)');
+  if(g.low.length)why.push('below 40 in '+g.low.map(plab).join(', '));
+  if(g.aggFail)why.push('aggregate below 50%');
+  return '<span class="chip bad">Not passed</span> '+g.n+': '+r1(g.sum)+'/'+g.max+(why.length?' \u2022 '+why.join('; '):'');
+}
+function viewResults(c){
+  var P=c.P,A=c.A,X=c.X,L=LEVELS[P.level],keys=[];
+  Object.keys(L.groups).forEach(function(g){keys=keys.concat(L.groups[g].p);});
+  if(!ui.res)ui.res={id:null,idx:aIdx(today()),marks:{}};
+  var r=ui.res,base=aIdx(today()),opts='';
+  for(var i=base-8;i<=base+2;i++)opts+='<option value="'+i+'"'+(i===r.idx?' selected':'')+'>'+aLabel(i)+'</option>';
+  var html='<h2>What you need next</h2><div class="card">';
+  X.groups.forEach(function(G){
+    if(G.passed){html+='<div style="margin-bottom:8px"><span class="chip ok">Passed</span> '+esc(G.n)+' in '+esc(G.passed)+'. No need to appear again.</div>';return;}
+    html+='<div style="margin-bottom:10px"><b>'+esc(G.n)+'</b> for '+aLabel(X.tIdx)+': ';
+    if(G.exs.length)html+='exempt in '+G.exs.map(function(k){return plab(k)+' ('+A.ex[k].mark+' marks, valid till '+aLabel(A.ex[k].exp)+')';}).join(', ')+'. ';
+    html+='You must score at least <b>40 in each</b> of '+G.rest.map(plab).join(', ')+' and <b>'+Math.ceil(G.need)+' marks in total</b> across them (about '+r1(G.avg)+' per paper).';
+    G.rest.forEach(function(k){var lv=lastScore(P,k);if(lv!==null)html+='<div class="mut">'+plab(k)+': last '+Math.round(lv)+', needs about '+Math.max(0,Math.ceil(G.avg-lv))+' more marks to reach the average target</div>';});
+    html+='</div>';
+  });
+  if(!L.exempt)html+='<div class="mut">Foundation: this app does not apply any paper exemption. You pass with 40% in every paper and 50% overall. Check the latest ICAI rules.</div>';
+  else html+='<div class="mut">Rule used: 40 marks in every paper and 50% in the group total. A paper with 60+ in an attempt where you sat every paper of that group but failed the group is exempt for the next 3 attempts. Exempted marks are counted as scored. Confirm with ICAI before relying on exact numbers.</div>';
+  if(P.attempts.length)html+='<div style="margin-top:10px"><button class="btn" data-act="plannext">Plan next attempt</button></div>';
+  html+='</div>';
+  html+='<h2>'+(r.id?'Edit':'Add')+' attempt result</h2><div class="card"><label>Attempt</label><select data-chg="residx">'+opts+'</select><label>Marks out of 100 (leave blank if absent)</label><div class="grid">';
+  keys.forEach(function(k){html+='<div><div class="mut">'+esc(pfull(k))+'</div><input type="number" min="0" max="100" step="0.5" data-mk="'+k+'" value="'+(r.marks[k]===undefined?'':r.marks[k])+'"></div>';});
+  html+='</div><div class="row" style="margin-top:12px"><button class="btn" data-act="saveres">Save result</button>'+(r.id?'<button class="btn sec" data-act="cancelres">Cancel edit</button>':'')+'</div></div>';
+  html+='<h2>Attempt history</h2>';
+  if(!P.attempts.length)html+='<div class="card mut">No results yet.</div>';
+  A.rows.slice().reverse().forEach(function(row){
+    var a=row.a;
+    html+='<div class="card"><div class="row sp"><h3>'+esc(a.label)+'</h3><span><button class="btn sec sm" data-act="editres" data-id="'+a.id+'">Edit</button> <button class="btn danger sm" data-act="delres" data-id="'+a.id+'">Delete</button></span></div><div class="scroll"><table>';
+    keys.forEach(function(k){var m=a.marks[k];if(m===undefined)return;html+='<tr><td>'+esc(pfull(k))+'</td><td><b>'+m+'</b></td><td>'+(m>=60?'<span class="chip ok">60+</span>':(m<40?'<span class="chip bad">&lt;40</span>':''))+'</td></tr>';});
+    html+='</table></div>';
+    row.groups.forEach(function(g){
+      html+='<div style="margin-top:8px">'+groupVerdict(g)+'</div>';
+      if(g.newEx.length)html+='<div class="mut">Exemption earned: '+g.newEx.map(function(k){return plab(k)+' (till '+aLabel(aIdx(parse(a.date))+3)+')';}).join(', ')+'</div>';
+    });
+    html+='</div>';
+  });
+  return html;
+}
+
+function viewPlan(c){
+  var P=c.P,X=c.X,I=c.I;
+  if(I.phase==='over'||!X.study.length)return '<div class="card">No active plan. Add results in Results or change groups and exam date in Settings.</div>';
+  var R=roadmap(c),ms=[];
+  ms.push(['Learning phase ends / revision starts',addDays(I.ex,-I.revDays)]);
+  ms.push(['Mock and practice phase starts',addDays(I.ex,-I.mockDays)]);
+  ms.push(['Exam starts',I.ex]);
+  var html='<h2>Milestones</h2><div class="card">';
+  html+='<div class="row sp"><span>Syllabus completion (at your pace)</span><b>'+(R.doneOn?fmt(R.doneOn):'not before the exam')+'</b></div>';
+  ms.forEach(function(m){html+='<div class="row sp" style="margin-top:6px"><span>'+m[0]+'</span><b>'+fmt(m[1])+'</b></div>';});
+  if(!R.doneOn)html+='<p class="mut" style="margin-bottom:0">At '+P.dailyHours+' h/day the syllabus will not finish in time. You need about '+(isFinite(I.need)?r1(I.need):'more')+' h/day, or reduce hours on papers you know well.</p>';
+  html+='</div><h2>Week by week</h2><div class="card scroll"><table><tr><th>Wk</th><th>Dates</th><th>Phase</th><th>Hrs</th><th>Where the time goes</th></tr>';
+  var rows=ui.showAll?R.rows:R.rows.slice(0,16);
+  rows.forEach(function(w){
+    html+='<tr><td>'+w.n+'</td><td>'+w.start.getDate()+' '+MON[w.start.getMonth()]+' \u2013 '+w.end.getDate()+' '+MON[w.end.getMonth()]+'</td><td>'+w.ph+'</td><td>'+r1(w.hrs)+'</td><td>'+Object.keys(w.alloc).map(function(k){return plab(k)+' '+r1(w.alloc[k]/60)+'h';}).join(' \u2022 ')+'</td></tr>';
+  });
+  html+='</table>'+(R.rows.length>16?'<div style="margin-top:8px"><button class="btn sec sm" data-act="showall">'+(ui.showAll?'Show fewer weeks':'Show all '+R.rows.length+' weeks')+'</button></div>':'')+'</div>';
+  html+='<div class="mut">The plan is recalculated from your logged hours every time you open the app, so missed days and early finishes automatically rebalance the weeks ahead. Weak papers (low last score) and Focus papers get more time.</div>';
+  return html;
+}
+
+function viewLog(c){
+  var P=c.P,L=LEVELS[P.level],keys=[];
+  Object.keys(L.groups).forEach(function(g){keys=keys.concat(L.groups[g].p);});
+  var po=keys.map(function(k){return '<option value="'+k+'">'+esc(pfull(k))+'</option>';}).join('');
+  var html='<div class="row" style="margin-bottom:12px"><button class="btn" data-act="logsession">Log a study session</button></div>';
+  html+='<div class="card"><h3>Add mock / test score</h3><div class="row"><select id="mk-paper">'+po+'</select><input type="date" id="mk-date" value="'+iso(today())+'" style="width:auto"><input type="number" id="mk-score" min="0" step="0.5" placeholder="Score"> / <input type="number" id="mk-max" min="1" value="100"></div><div style="margin-top:8px"><button class="btn sec sm" data-act="addmock">Add</button></div>';
+  P.mocks.slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,8).forEach(function(m){
+    html+='<div class="blk"><div>'+esc(pfull(m.paper))+'<div class="mut">'+fmt(parse(m.date))+'</div></div><div class="r"><b>'+m.score+'/'+m.max+'</b><button class="btn danger sm" data-act="delmock" data-id="'+m.id+'">\u00d7</button></div></div>';
+  });
+  html+='</div>';
+  var pend=P.sessions.filter(function(s){return s.pending&&!s.pdone;});
+  html+='<h2>Pending work</h2><div class="card">';
+  if(!pend.length)html+='<div class="mut">Nothing pending.</div>';
+  pend.slice().reverse().forEach(function(s){html+='<div class="blk"><div>'+esc(s.pending)+'<div class="mut">'+esc(pfull(s.paper))+' \u2022 '+fmt(parse(s.date))+'</div></div><div class="r"><button class="btn sm" data-act="pdone" data-id="'+s.id+'">Done</button></div></div>';});
+  html+='</div><h2>Mistake notebook</h2><div class="card">';
+  var ms=P.sessions.filter(function(s){return s.mistakes;});
+  if(!ms.length)html+='<div class="mut">Mistakes you note after a session appear here.</div>';
+  ms.slice().reverse().slice(0,15).forEach(function(s){html+='<div class="blk"><div>'+esc(s.mistakes)+'<div class="mut">'+esc(pfull(s.paper))+(s.chapter?' \u2022 '+esc(s.chapter):'')+' \u2022 '+fmt(parse(s.date))+'</div></div></div>';});
+  html+='</div><h2>Recent sessions</h2><div class="card">';
+  if(!P.sessions.length)html+='<div class="mut">No sessions logged yet.</div>';
+  P.sessions.slice().reverse().slice(0,15).forEach(function(s){
+    html+='<div class="blk"><div>'+esc(pfull(s.paper))+(s.chapter?'<div class="mut">'+esc(s.chapter)+'</div>':'')+'<div class="mut">'+fmt(parse(s.date))+(s.rating?' \u2022 understanding '+s.rating+'/5':'')+'</div></div><div class="r"><b>'+fmtMin(s.min)+'</b><button class="btn danger sm" data-act="delsess" data-id="'+s.id+'">\u00d7</button></div></div>';
+  });
+  return html+'</div>';
+}
+
+function cloudBadge(){
+  if(!cloud.cfg)return '';
+  var t=cloud.state==='on'?'☁ '+esc(cloud.syncMsg||'signed in'):(cloud.state==='nolib'?'☁ cloud library not loaded':'☁ not signed in');
+  return '<div class="mut" style="margin:-6px 0 10px;text-align:right">'+t+'</div>';
+}
+function cloudCard(){
+  var h='<div class="card"><h3>Cloud account (sync + Partner)</h3>';
+  var mk=cloud.msg?'<div class="chip '+(cloud.msgKind||'')+'" style="margin:8px 0;white-space:normal">'+esc(cloud.msg)+'</div>':'';
+  if(!cloud.cfg){
+    h+='<div class="mut">Optional. Lets you sign in, sync between devices and use Partner features. Follow the setup guide, then paste your Supabase <b>Project URL</b> and the <b>anon / publishable</b> key (the public one, never the secret one).</div>'+mk+
+      '<label>Project URL</label><input type="text" id="cl-url" placeholder="https://abcdefgh.supabase.co">'+
+      '<label>Anon / publishable key</label><input type="text" id="cl-key" placeholder="eyJ... or sb_publishable_...">'+
+      '<div style="margin-top:10px"><button class="btn" data-act="cloudsave">Save and connect</button></div>';
+  }else if(cloud.state==='nolib'){
+    h+='<div class="mut">Connected to '+esc(cloud.cfg.url)+', but the cloud library could not load. Check your internet and reload.</div>'+mk+'<div style="margin-top:10px"><button class="btn danger sm" data-act="cloudclear">Disconnect</button></div>';
+  }else if(!cloud.user){
+    h+='<div class="mut">Project: '+esc(cloud.cfg.url)+'</div>'+mk+
+      '<label>Email</label><input type="text" id="cl-email" autocomplete="email">'+
+      '<label>Password (min 6 characters)</label><input type="password" id="cl-pw" autocomplete="current-password">'+
+      '<div class="row" style="margin-top:10px"><button class="btn" data-act="signin">Sign in</button><button class="btn sec" data-act="signup">Create account</button><button class="btn danger sm" data-act="cloudclear">Disconnect</button></div>';
+  }else{
+    h+='<div>Signed in as <b>'+esc(cloud.user.email||'')+'</b></div><div class="mut">'+esc(cloud.syncMsg||'')+'</div>'+mk+
+      '<div class="row" style="margin-top:10px"><button class="btn" data-act="syncnow">Sync now</button><button class="btn sec" data-act="signout">Sign out</button></div>'+
+      '<div class="mut" style="margin-top:8px">Changes sync automatically a few seconds after you make them. If you are offline, they are kept and sent later.</div>';
+  }
+  return h+'</div>';
+}
+var PREFS=[['overall','Overall progress'],['subjects','Subject-wise progress'],['chapters','Chapter completion'],['goals','Study goals'],['study_time','Study time and streaks'],['tests','Test and attempt results'],['revisions','Revision status']];
+function bar(p){return '<div class="bar"><i style="width:'+clamp(Number(p)||0,0,100)+'%"></i></div>';}
+function renderSummary(pd,mine){
+  var d=pd||{},sh=d.shared||{},keys=Object.keys(sh);
+  var h='<div class="card" style="border-color:var(--ac)"><div class="row sp"><h3>'+esc(d.name||'Partner')+'’s shared progress</h3><button class="btn sec sm" data-act="closep">Close</button></div><div class="mut">This is your partner’s data, shown only because she switched it on.'+(d.updated_at?' Updated '+esc(fmtTs(d.updated_at))+'.':'')+'</div>';
+  if(!keys.length)h+='<p>'+esc(d.note||'Your partner has not switched on any sharing yet.')+'</p>';
+  if(sh.overall){var o=sh.overall;h+='<h3 style="margin-top:12px">Overall</h3><div>'+esc(o.level)+' • '+esc(o.exam)+' exam • '+esc(o.daysLeft)+' days left</div><div class="mut">Syllabus hours covered: '+esc(o.syllabusHoursPct)+'% • Chapters: '+esc(o.chaptersDone)+' / '+esc(o.chaptersTotal)+'</div>'+bar(o.syllabusHoursPct);}
+  if(sh.subjects&&sh.subjects.length){h+='<h3 style="margin-top:12px">Subjects</h3>';sh.subjects.forEach(function(s){var p=s.hoursNeeded?s.hoursDone/s.hoursNeeded*100:0;h+='<div style="margin-top:6px"><div class="row sp"><span>'+esc(s.paper)+' '+esc(s.name)+'</span><span class="mut">'+esc(s.hoursDone)+' / '+esc(s.hoursNeeded)+' h • '+esc(s.chaptersDone)+'/'+esc(s.chaptersTotal)+' ch</span></div>'+bar(p)+'</div>';});}
+  if(sh.chapters&&sh.chapters.length){h+='<h3 style="margin-top:12px">Chapters completed</h3>';sh.chapters.forEach(function(c){h+='<div style="margin-top:6px"><b>'+esc(c.paper)+'</b> <span class="mut">'+esc((c.done||[]).length)+' / '+esc(c.total)+' done, '+esc(c.learning)+' in progress</span>'+((c.done||[]).length?'<div class="mut" style="font-size:12px">'+(c.done||[]).map(esc).join(' • ')+'</div>':'')+'</div>';});}
+  if(sh.goals){var g=sh.goals;h+='<h3 style="margin-top:12px">Goals</h3><div>Today '+esc(g.todayHours)+' / '+esc(g.dailyGoalH)+' h • This week '+esc(g.weekHours)+' / '+esc(g.weeklyGoalH)+' h</div>'+bar(g.weeklyGoalH?g.weekHours/g.weeklyGoalH*100:0);}
+  if(sh.study_time){var s=sh.study_time;h+='<h3 style="margin-top:12px">Study time</h3><div>Last 7 days: <b>'+esc(s.last7Hours)+' h</b> on '+esc(s.daysStudiedLast7)+' days • Streak: '+esc(s.streakDays)+' days • Total: '+esc(s.totalHours)+' h</div>';
+    if(mine&&mine.study_time)h+='<div class="mut">You: '+esc(mine.study_time.last7Hours)+' h in the last 7 days, streak '+esc(mine.study_time.streakDays)+' days</div>';}
+  if(sh.tests){var t=sh.tests;h+='<h3 style="margin-top:12px">Tests</h3>';(t.attempts||[]).forEach(function(a){h+='<div>'+esc(a.label)+': '+Object.keys(a.marks||{}).map(function(k){return esc(k)+' '+esc(a.marks[k]);}).join(', ')+'</div>';});(t.mocks||[]).forEach(function(m){h+='<div class="mut">Mock '+esc(m.paper)+': '+esc(m.pct)+'% ('+esc(m.date)+')</div>';});if(!(t.attempts||[]).length&&!(t.mocks||[]).length)h+='<div class="mut">No results yet.</div>';}
+  if(sh.revisions){var r=sh.revisions;h+='<h3 style="margin-top:12px">Revisions</h3><div>Due now: '+esc(r.dueNow)+' • Done in last 7 days: '+esc(r.completedLast7)+' • Coming in next 7 days: '+esc(r.scheduledNext7)+'</div>';}
+  return h+'</div>';
+}
+
+/* ---------- AI tutor (key stays on the server, in a Supabase Edge Function) ---------- */
+ui.ai={q:'',mode:'ask',ctx:true,busy:false,ans:'',err:''};
+function aiContext(P){
+  var A=analyse(P),X=activeInfo(P,A),out=[LEVELS[P.level].name+', exam '+P.examDate];
+  X.study.forEach(function(k){
+    var lv=lastScore(P,k),nx=P.papers[k].ch.filter(function(x){return x.status!=='done';}).slice(0,3).map(function(x){return lblOf(x);});
+    out.push(pfull(k)+(lv!==null?' last score '+Math.round(lv):'')+(nx.length?'; next: '+nx.join(', '):''));
+  });
+  return out.join('\n').slice(0,1400);
+}
+function viewAI(c){
+  if(!cloud.cfg||cloud.state==='off'||cloud.state==='nolib'||!cloud.user)return '<div class="card"><h3>AI tutor</h3><p>Sign in to your cloud account first (Settings → Cloud account). The AI runs on your own Supabase project, so no key is ever kept in this page.</p><button class="btn" data-act="tab" data-t="settings">Go to Settings</button></div>';
+  var a=ui.ai;
+  var h='<div class="card"><h3>AI tutor</h3><div class="mut">Ask a doubt, get a topic explained, or get 5 practice questions. Up to 30 a day. Answers can be wrong: check important points in ICAI material.</div>'+
+   '<label>What do you want?</label><select id="ai-mode"><option value="ask"'+(a.mode==='ask'?' selected':'')+'>Answer my doubt</option><option value="explain"'+(a.mode==='explain'?' selected':'')+'>Explain a topic</option><option value="quiz"'+(a.mode==='quiz'?' selected':'')+'>Give me practice questions</option><option value="plan"'+(a.mode==='plan'?' selected':'')+'>Suggest how to study this week</option></select>'+
+   '<label>Your question or topic</label><textarea id="ai-q" maxlength="2000" placeholder="Example: Explain AS 10 with a simple example">'+esc(a.q)+'</textarea>'+
+   '<label style="display:flex;gap:6px;align-items:center;color:var(--tx)"><input type="checkbox" id="ai-ctx"'+(a.ctx?' checked':'')+'> Share my papers, last scores and next chapters with the AI (nothing else)</label>'+
+   '<div style="margin-top:8px"><button class="btn" data-act="aiask"'+(a.busy?' disabled':'')+'>'+(a.busy?'Thinking…':'Ask')+'</button></div></div>';
+  if(a.err)h+='<div class="card"><span class="chip bad">'+esc(a.err)+'</span></div>';
+  if(a.ans)h+='<div class="card"><div style="white-space:pre-wrap;line-height:1.5">'+esc(a.ans)+'</div></div>';
+  return h;
+}
+async function aiAsk(P){
+  var a=ui.ai;a.mode=readv('ai-mode')||a.mode;a.q=readv('ai-q').trim();var cx=document.getElementById('ai-ctx');a.ctx=cx?cx.checked:a.ctx;
+  if(!a.q){a.err='Type your question first';a.ans='';render();return;}
+  a.busy=true;a.err='';a.ans='';render();
+  try{
+    var r=await cloud.client.functions.invoke('ai-tutor',{body:{mode:a.mode,question:a.q,context:a.ctx?aiContext(P):''}});
+    if(r.error){
+      var msg='The AI function is not reachable. Has it been deployed? (see the setup guide)';
+      try{if(r.error.context&&r.error.context.json){var j=await r.error.context.json();if(j&&j.error)msg=j.error;}}catch(e){}
+      throw new Error(msg);
+    }
+    if(r.data&&r.data.error)throw new Error(r.data.error);
+    a.ans=(r.data&&r.data.answer)||'No answer came back.';
+  }catch(e){a.err=(e&&e.message)||'Something went wrong';}
+  a.busy=false;render();
+}
+function viewPartner(c){
+  if(!cloud.cfg||cloud.state==='off')return '<div class="card"><h3>Partner</h3><p>Partner features need the free cloud account. Setting it up takes about 10 minutes, once.</p><button class="btn" data-act="tab" data-t="settings">Open cloud setup</button></div>';
+  if(cloud.state==='nolib')return '<div class="card"><h3>Partner</h3><p>The cloud library could not load. Check your internet and reload the page.</p></div>';
+  if(!cloud.user)return '<div class="card"><h3>Partner</h3><p>Sign in first (Settings → Cloud account).</p><button class="btn" data-act="tab" data-t="settings">Go to Settings</button></div>';
+  var me=cloud.user.id,myMail=String(cloud.user.email||'').toLowerCase();
+  var po=S.profiles.map(function(p){var sel=shareProfile();return '<option value="'+esc(p.id)+'"'+(sel&&sel.id===p.id?' selected':'')+'>'+esc(p.name)+' • '+esc(LEVELS[p.level].name)+'</option>';}).join('');
+  var h='<div class="card"><h3>Profile you share with your partner</h3><select data-chg="shareprof">'+po+'</select><div class="mut" style="margin-top:6px">Your partner only sees what you switch on for her below. Notes, mistakes, pending work and anything private are never shared.</div></div>';
+  h+='<div class="card"><h3>Invite your partner</h3><div class="row"><input type="text" id="pt-email" placeholder="partner@email.com" style="flex:1;min-width:180px"><button class="btn" data-act="invite">Send invite</button></div><div class="mut" style="margin-top:6px">She needs her own account in the same cloud project. The invite shows up in her Partner tab.</div></div>';
+  var live=cloud.links.filter(function(l){return l.status==='pending'||l.status==='accepted';});
+  if(!live.length)h+='<div class="card mut">No connections yet.</div>';
+  live.forEach(function(l){
+    var mine=l.requester===me,other=mine?l.invitee_email:l.requester_email;
+    if(l.status==='pending'){
+      if(mine)h+='<div class="card"><div class="row sp"><div><b>'+esc(other)+'</b><div class="mut">Invitation sent, waiting for a reply</div></div><button class="btn danger sm" data-act="revoke" data-l="'+esc(l.id)+'">Cancel</button></div></div>';
+      else h+='<div class="card"><div><b>'+esc(other)+'</b> invited you to connect.</div><div class="mut">If you accept, you can each choose what to share. Nothing is shared until you switch it on.</div><div class="row" style="margin-top:10px"><button class="btn" data-act="respond" data-l="'+esc(l.id)+'" data-ok="1">Accept</button><button class="btn sec" data-act="respond" data-l="'+esc(l.id)+'" data-ok="0">Decline</button></div></div>';
+      return;
+    }
+    var pf=cloud.prefs[l.id]||{};
+    h+='<div class="card"><div class="row sp"><div><h3>'+esc(other)+'</h3><span class="chip ok">Connected</span></div><button class="btn danger sm" data-act="revoke" data-l="'+esc(l.id)+'">Disconnect</button></div>';
+    h+='<h3 style="margin-top:14px">What you share with her</h3><div class="mut">All switches start OFF. You can change or remove them any time.</div><div class="opt" style="margin-top:8px">'+
+      PREFS.map(function(p){return '<label><input type="checkbox" data-chg="pref" data-l="'+esc(l.id)+'" data-f="'+p[0]+'"'+(pf[p[0]]?' checked':'')+'> '+p[1]+'</label>';}).join('')+'</div>';
+    h+='<div class="row" style="margin-top:12px"><button class="btn" data-act="viewp" data-l="'+esc(l.id)+'">View her shared progress</button></div>';
+    if(cloud.partner&&cloud.partner.link===l.id)h+=renderSummary(cloud.partner.data,cloud.partner.mine);
+    // shared goals
+    h+='<h3 style="margin-top:16px">Shared goals</h3>';
+    var gs=cloud.goals.filter(function(g){return g.link_id===l.id;});
+    if(!gs.length)h+='<div class="mut">No shared goals yet.</div>';
+    gs.forEach(function(g){
+      var rows=cloud.progress.filter(function(x){return x.goal_id===g.id;}),tot=0;
+      var unit=g.kind==='hours'?' h':(g.kind==='chapters'?' chapters':'');
+      h+='<div style="margin-top:10px;border-top:1px solid var(--bd);padding-top:8px"><div class="row sp"><b>'+esc(g.title)+'</b><span class="mut">'+esc(g.start_date)+' → '+esc(g.end_date)+'</span></div>';
+      var mineRow=null;
+      rows.forEach(function(x){tot+=Number(x.value)||0;if(x.user_id===me)mineRow=x;});
+      [[me,'You'],[null,other]].forEach(function(pair){
+        var row=pair[0]?mineRow:rows.filter(function(x){return x.user_id!==me;})[0],v=row?Number(row.value):0;
+        h+='<div class="row sp mut" style="margin-top:4px"><span>'+esc(pair[1])+'</span><span>'+esc(r1(v))+unit+'</span></div>'+bar(g.target?v/g.target*100:0);
+      });
+      h+='<div class="mut" style="margin-top:4px">Together: '+esc(r1(tot))+' / '+esc(g.target)+unit+' ('+Math.round(g.target?tot/g.target*100:0)+'%) • each person’s numbers are tracked separately</div>';
+      if(g.kind==='manual')h+='<div class="row" style="margin-top:6px"><input type="number" min="0" step="1" id="gv-'+esc(g.id)+'" value="'+(mineRow?esc(mineRow.value):0)+'"><button class="btn sec sm" data-act="goalsave" data-g="'+esc(g.id)+'">Save my number</button></div>';
+      else h+='<div class="mut">Your number updates automatically from your logged '+(g.kind==='hours'?'study hours':'completed chapters')+'.</div>';
+      if(g.created_by===me)h+='<div style="margin-top:6px"><button class="btn danger sm" data-act="goalarch" data-g="'+esc(g.id)+'">Archive goal</button></div>';
+      h+='</div>';
+    });
+    var end=iso(addDays(today(),7));
+    h+='<div style="margin-top:14px;border-top:1px solid var(--bd);padding-top:10px"><b>New shared goal</b><label>Title</label><input type="text" id="gt-'+esc(l.id)+'" placeholder="e.g. 20 hours of study this week">'+
+      '<div class="row" style="margin-top:8px"><select id="gk-'+esc(l.id)+'"><option value="hours">Study hours (automatic)</option><option value="chapters">Chapters completed (automatic)</option><option value="manual">Manual number</option></select><input type="number" min="1" step="1" id="gn-'+esc(l.id)+'" placeholder="Target"><input type="date" id="ge-'+esc(l.id)+'" value="'+end+'" style="width:auto"></div>'+
+      '<div style="margin-top:8px"><button class="btn sec sm" data-act="addgoal" data-l="'+esc(l.id)+'">Create goal</button></div></div>';
+    h+='</div>';
+  });
+  h+='<div class="mut">Not built yet: partner notifications, shared study sessions, challenges and shared resources.</div>';
+  return h;
+}
+function readv(id){var e=document.getElementById(id);return e?e.value:'';}
+function guard(p){return p.catch(function(e){toast((e&&e.message)?e.message:'Something went wrong');});}
+function cact(a,d){
+  if(a==='cloudsave'){
+    var url=readv('cl-url').trim().replace(/\/+$/,''),key=readv('cl-key').trim(),err=validateCfg(url,key);
+    if(err){cmsg(err,'bad');render();return true;}
+    cloud.cfg={url:url,key:key};
+    try{localStorage.setItem(CKEY,JSON.stringify(cloud.cfg));}catch(e){}
+    cmsg('Saved. Now create an account or sign in.','ok');initCloud();render();return true;
+  }
+  if(a==='cloudclear'){
+    if(confirm('Disconnect the cloud? Your data stays on this device.')){
+      if(cloud.client)cloud.client.auth.signOut().catch(function(){});
+      cloud.cfg=null;try{localStorage.removeItem(CKEY);}catch(e){}
+      cloud.user=null;cloud.client=null;cloud.state='off';cloud.links=[];cloud.partner=null;cmsg('');render();
+    }
+    return true;
+  }
+  if(a==='signin'||a==='signup'){
+    var em=readv('cl-email').trim(),pw=readv('cl-pw');
+    if(!em||!pw){cmsg('Enter your email and password','bad');render();return true;}
+    if(a==='signup'&&pw.length<6){cmsg('Password must be at least 6 characters','bad');render();return true;}
+    doAuth(a==='signup'?'up':'in',em,pw);return true;
+  }
+  if(a==='signout'){
+    if(cloud.client)cloud.client.auth.signOut().then(function(){cmsg('Signed out. Your data stays on this device.','ok');render();});
+    return true;
+  }
+  if(a==='syncnow'){guard(syncAll().then(refreshPartner));return true;}
+  if(a==='invite'){
+    var e1=readv('pt-email').trim();
+    guard(rpc('invite_partner',{p_email:e1}).then(function(m){toast(m);return refreshPartner();}));return true;
+  }
+  if(a==='respond'){
+    guard(rpc('respond_invite',{p_link:d.l,p_accept:d.ok==='1'}).then(function(m){toast(m);return refreshPartner();}));return true;
+  }
+  if(a==='revoke'){
+    if(confirm('Remove this connection? Sharing stops immediately for both of you.')){
+      if(cloud.partner&&cloud.partner.link===d.l)cloud.partner=null;
+      guard(rpc('revoke_link',{p_link:d.l}).then(function(m){toast(m);return refreshPartner();}));
+    }
+    return true;
+  }
+  if(a==='viewp'){
+    guard(rpc('get_partner_summary',{p_link:d.l}).then(function(r){cloud.partner={link:d.l,data:r,mine:buildSummary(shareProfile())};render();}));return true;
+  }
+  if(a==='closep'){cloud.partner=null;render();return true;}
+  if(a==='addgoal'){
+    var title=readv('gt-'+d.l).trim(),kind=readv('gk-'+d.l),target=Number(readv('gn-'+d.l)),end=readv('ge-'+d.l);
+    if(!title||!(target>0)||!end||end<iso(today())){toast('Enter a title, a target above 0 and an end date that is not in the past');return true;}
+    guard(cloud.client.from('shared_goals').insert({link_id:d.l,title:title.slice(0,120),kind:kind,target:target,start_date:iso(today()),end_date:end}).then(function(r){
+      if(r.error)throw r.error;toast('Goal created');return updateMyProgress().then(refreshPartner);
+    }));return true;
+  }
+  if(a==='goalsave'){
+    var v=Number(readv('gv-'+d.g));
+    if(!(v>=0)){toast('Enter a number');return true;}
+    guard(cloud.client.from('goal_progress').upsert({goal_id:d.g,user_id:cloud.user.id,value:v},{onConflict:'goal_id,user_id'}).then(function(r){
+      if(r.error)throw r.error;toast('Saved');return refreshPartner();
+    }));return true;
+  }
+  if(a==='goalarch'){
+    if(confirm('Archive this goal for both of you?')){
+      guard(cloud.client.from('shared_goals').update({status:'archived'}).eq('id',d.g).then(function(r){
+        if(r.error)throw r.error;return refreshPartner();
+      }));
+    }
+    return true;
+  }
+  return false;
+}
+function cchg(k,d,el){
+  if(k==='shareprof'){S.shareId=el.value;save();guard(pushSummary().then(updateMyProgress).then(refreshPartner));return true;}
+  if(k==='pref'){
+    var row={link_id:d.l,owner:cloud.user.id};
+    document.querySelectorAll('[data-chg="pref"]').forEach(function(b){if(b.dataset.l===d.l)row[b.dataset.f]=b.checked;});
+    guard(cloud.client.from('share_prefs').upsert(row,{onConflict:'link_id,owner'}).then(function(r){
+      if(r.error)throw r.error;return pushSummary();
+    }).then(function(){toast('Sharing updated');return refreshPartner();}));
+    return true;
+  }
+  return false;
+}
+
+function viewSettings(c){
+  var P=c.P,L=LEVELS[P.level],html='<div class="card"><h3>Profile settings</h3>';
+  html+='<label>Name</label><input type="text" id="st-name" value="'+esc(P.name)+'">';
+  html+='<div class="mut" style="margin-top:6px">Level: '+esc(L.name)+' (to start the next level, tap \uff0b at the top to add a new profile; this one stays as your history)</div>';
+  if(P.level!=='foundation'){
+    html+='<label>Groups you are preparing for</label><div class="opt">'+Object.keys(L.groups).map(function(g){return '<label style="color:var(--tx)"><input type="checkbox" data-grp="'+g+'"'+(P.groups.indexOf(g)>=0?' checked':'')+'> '+L.groups[g].n+'</label>';}).join('')+'</div>';
+  }
+  html+='<label>Exam start date</label><input type="date" id="st-date" value="'+esc(P.examDate)+'">';
+  html+='<label>Study hours per day</label><input type="number" id="st-hours" min="1" max="14" step="0.5" value="'+P.dailyHours+'">';
+  html+='<label>Weekly goal (hours)</label><input type="number" id="st-wg" min="1" max="90" step="1" value="'+P.weeklyGoal+'">';
+  html+='<label>Target marks per paper (used to find weak papers)</label><input type="number" id="st-target" min="40" max="100" step="1" value="'+P.target+'">';
+  html+='<label>Weekly rest day</label><select id="st-rest"><option value="-1"'+(P.rest<0?' selected':'')+'>No rest day</option>'+DAYN.map(function(d,i){return '<option value="'+i+'"'+(P.rest===i?' selected':'')+'>'+d+'</option>';}).join('')+'</select>';
+  html+='<div style="margin-top:12px"><button class="btn" data-act="saveset">Save settings</button></div></div>';
+  html+=cloudCard();
+  html+='<div class="card"><h3>Backup</h3><div class="mut">Your data lives only in this browser. Export a backup file regularly and keep it safe. Importing adds profiles; it never overwrites existing ones.</div><div class="row" style="margin-top:10px"><button class="btn sec" data-act="export">Export backup</button><button class="btn sec" data-act="import">Import backup</button><input type="file" id="impf" accept=".json,application/json" style="display:none" data-chg="importfile"></div></div>';
+  html+='<div class="card"><h3>Danger zone</h3><button class="btn danger" data-act="delprof">Delete this profile</button></div>';
+  return html;
+}
+
+function modalHtml(c){
+  var m=ui.modal;if(!m)return '';
+  var P=c.P;
+  if(m.type==='msg')return '<div class="ov"><div class="modal"><h3>'+esc(m.title)+'</h3><p>'+esc(m.body)+'</p><button class="btn" data-act="mclose">OK</button></div></div>';
+  var L=LEVELS[P.level],keys=[];
+  Object.keys(L.groups).forEach(function(g){keys=keys.concat(L.groups[g].p);});
+  var po=keys.map(function(k){return '<option value="'+k+'"'+(k===m.k?' selected':'')+'>'+esc(pfull(k))+'</option>';}).join('');
+  var chs=(P.papers[m.k]?P.papers[m.k].ch:[]).map(function(ch){return '<option value="'+ch.id+'"'+(m.ch===ch.id?' selected':'')+'>'+esc(ch.name)+'</option>';}).join('');
+  return '<div class="ov"><div class="modal"><h3>Session review</h3>'+
+    '<label>Paper</label><select id="sm-k" data-chg="smpaper">'+po+'</select>'+
+    '<label>Chapter (optional)</label><select id="sm-ch"><option value="">\u2014 none \u2014</option>'+chs+'</select>'+
+    '<label>Minutes actually studied</label><input type="number" id="sm-min" min="5" step="5" value="'+(m.min||60)+'">'+
+    '<label>How well did you understand? (optional)</label><select id="sm-rate"><option value="">\u2014</option>'+[1,2,3,4,5].map(function(n){return '<option value="'+n+'"'+(m.rate==n?' selected':'')+'>'+n+(n===1?' (lost)':(n===5?' (clear)':''))+'</option>';}).join('')+'</select>'+
+    '<label>Mistakes or confusing points (optional)</label><textarea id="sm-mis">'+esc(m.mis||'')+'</textarea>'+
+    '<label>Pending work left (optional)</label><input type="text" id="sm-pen" value="'+esc(m.pen||'')+'">'+
+    '<label style="color:var(--tx);display:flex;gap:6px;align-items:center"><input type="checkbox" id="sm-done"> I finished this chapter (schedule revisions)</label>'+
+    '<div class="row" style="margin-top:14px"><button class="btn" data-act="msave">Save session</button><button class="btn sec" data-act="mclose">Cancel</button></div></div></div>';
+}
+
+/* ---------- render ---------- */
+function render(){
+  var app=document.getElementById('app'),P=cur();
+  document.documentElement.dataset.theme=theme();
+  if(!P||ui.onb){app.innerHTML=head(P)+viewOnboard();return;}
+  var A=analyse(P),X=activeInfo(P,A),I=planInfo(P,A,X),c={P:P,A:A,X:X,I:I},body='';
+  if(ui.tab==='today')body=viewToday(c);
+  else if(ui.tab==='papers')body=viewPapers(c);
+  else if(ui.tab==='results')body=viewResults(c);
+  else if(ui.tab==='plan')body=viewPlan(c);
+  else if(ui.tab==='log')body=viewLog(c);
+  else if(ui.tab==='partner')body=viewPartner(c);
+  else if(ui.tab==='ai')body=viewAI(c);
+  else body=viewSettings(c);
+  var y=window.scrollY;
+  app.innerHTML=head(P)+body+nav()+modalHtml(c);
+  try{window.scrollTo(0,y);}catch(e){}
+}
+
+/* ---------- actions ---------- */
+function readModal(){
+  var m=ui.modal;if(!m||m.type!=='session')return;
+  var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  m.k=g('sm-k')||m.k;m.ch=g('sm-ch');m.min=Number(g('sm-min'))||60;m.rate=g('sm-rate');m.mis=g('sm-mis');m.pen=g('sm-pen');
+}
+function nextSuggestion(P,s){
+  if(s.rating&&s.rating<=2)return 'You rated this '+s.rating+'/5. Redo the confusing parts tomorrow and solve about 10 questions on it before moving on.';
+  if(s.pending)return 'You noted pending work: '+s.pending+'. Clear it first in your next session.';
+  var A=analyse(P),X=activeInfo(P,A),I=planInfo(P,A,X),w=weights(P,X,I.phase,null);
+  var top=Object.keys(w).filter(function(k){return k!==s.paper;}).sort(function(a,b){return w[b]-w[a];})[0]||s.paper;
+  return 'Next suggested paper: '+pfull(top)+' ('+why(P,top,I.phase)+').';
+}
+function getCh(P,k,id){var l=P.papers[k]?P.papers[k].ch:[];for(var i=0;i<l.length;i++)if(l[i].id===id)return l[i];return null;}
+function setDone(P,k,ch){
+  if(!ch.revs||!ch.revs.length)ch.revs=makeRevs(ch.conf,today(),parse(P.examDate));
+  ch.status='done';ch.doneOn=iso(today());
+}
+function allKeys(P){var L=LEVELS[P.level],k=[];Object.keys(L.groups).forEach(function(g){k=k.concat(L.groups[g].p);});return k;}
+
+function act(a,d){
+  var P=cur();
+  if(a==='tab'){ui.tab=d.t;render();window.scrollTo(0,0);return;}
+  if(a==='aiask'){aiAsk(P);return;}
+  if(a==='theme'){var t=theme()==='dark'?'light':'dark';try{localStorage.setItem(TKEY,t);}catch(e){}render();return;}
+  if(a==='newprof'){startOnb();render();window.scrollTo(0,0);return;}
+  if(a==='cancelonb'){ui.onb=null;render();return;}
+  if(a==='createprof'){
+    var o=ui.onb;if(!o)return;
+    var groups=o.level==='foundation'?['ALL']:[];
+    if(o.level!=='foundation'){if(o.g1)groups.push('G1');if(o.g2)groups.push('G2');}
+    if(!groups.length){toast('Pick at least one group');return;}
+    if(!o.date){toast('Choose the exam date');return;}
+    var hrs=Number(o.hours);
+    if(!(hrs>=1&&hrs<=14)){toast('Daily hours must be between 1 and 14');return;}
+    var np=newProfile({name:String(o.name||'').trim(),level:o.level,groups:groups,examDate:o.date,dailyHours:hrs,rest:Number(o.rest)});
+    S.profiles.push(np);S.active=np.id;ui.onb=null;ui.tab='today';ui.res=null;commit();toast('Plan created');return;
+  }
+  if(!P)return;
+  if(cact(a,d))return;
+  if(a==='delprof'){
+    if(cloud.client&&cloud.user)cloud.client.from('study_profiles').delete().eq('profile_id',P.id).then(function(){},function(){});
+    if(confirm('Delete this profile and all its data? This cannot be undone. Export a backup first if unsure.')){
+      S.profiles=S.profiles.filter(function(x){return x.id!==P.id;});
+      S.active=S.profiles[0]?S.profiles[0].id:null;ui.res=null;commit();
+    }
+    return;
+  }
+  if(a==='logblock'){ui.modal={type:'session',k:d.k,min:Number(d.m)||60};render();return;}
+  if(a==='logsession'){
+    var A0=analyse(P),X0=activeInfo(P,A0);
+    ui.modal={type:'session',k:X0.study[0]||allKeys(P)[0],min:60};render();return;
+  }
+  if(a==='mclose'){ui.modal=null;render();return;}
+  if(a==='msave'){
+    readModal();
+    var m=ui.modal,chk=document.getElementById('sm-done'),finished=!!(chk&&chk.checked);
+    var min=Number(m.min);
+    if(!(min>=5&&min<=720)){toast('Enter minutes between 5 and 720');return;}
+    var ch=m.ch?getCh(P,m.k,m.ch):null;
+    var s={id:uid(),date:iso(today()),paper:m.k,min:min,rating:m.rate?Number(m.rate):0,mistakes:String(m.mis||'').trim(),pending:String(m.pen||'').trim(),chapter:ch?ch.name:''};
+    P.sessions.push(s);
+    if(ch){if(finished)setDone(P,m.k,ch);else if(ch.status==='todo')ch.status='learning';}
+    ui.modal={type:'msg',title:'Session saved',body:fmtMin(min)+' logged on '+PAPERS[m.k].n+'. '+nextSuggestion(P,s)};
+    commit();return;
+  }
+  if(a==='revdone'||a==='revhard'){
+    var ch2=getCh(P,d.k,d.c);if(!ch2)return;
+    var rv=(ch2.revs||[]).filter(function(x){return x.id===d.r;})[0];if(!rv)return;
+    if(a==='revdone'){rv.done=true;rv.doneOn=iso(today());}
+    else{rv.due=iso(addDays(today(),1));ch2.conf=Math.max(1,ch2.conf-1);}
+    commit();toast(a==='revdone'?'Revision done':'Moved to tomorrow, confidence lowered');return;
+  }
+  if(a==='addch'){
+    var ta=document.getElementById('addch-'+d.k);if(!ta)return;
+    var names=ta.value.split('\n').map(function(x){return x.trim();}).filter(Boolean);
+    if(!names.length){toast('Type at least one chapter name');return;}
+    names.forEach(function(n){P.papers[d.k].ch.push({id:uid(),name:n.slice(0,120),status:'todo',conf:3,revs:[]});});
+    commit();toast(names.length+' chapter(s) added');return;
+  }
+  if(a==='tgl'){ui.open[d.k]=!ui.open[d.k];render();return;}
+  if(a==='loadch'){
+    var list=SYL[d.k]||[];
+    if(!list.length){toast('No chapter list for this paper. Add your own below.');return;}
+    var have={},added=0,L=P.papers[d.k].ch;
+    L.forEach(function(x){have[x.name.toLowerCase()]=1;});
+    list.forEach(function(nm){
+      if(SUB[nm]){
+        var idx=-1;L.forEach(function(x,i){if(x.name===nm)idx=i;});
+        var st='todo',old=null;
+        if(idx>=0){old=L[idx];st=old.status;L.splice(idx,1);}
+        var items=SUB[nm].filter(function(u){return !have[(nm+' \u203a '+u).toLowerCase()];}).map(function(u){var c=mkCh(nm,u,st);if(old&&st==='done'){c.doneOn=old.doneOn;c.revs=old.revs||[];c.conf=old.conf||3;}return c;});
+        L.splice(idx>=0?idx:L.length,0,...items);added+=items.length;
+      }else if(!have[nm.toLowerCase()]){L.push({id:uid(),name:nm,status:'todo',conf:3,revs:[]});added++;}
+    });
+    commit();toast(added?added+' items added':'Already loaded');return;
+  }
+  if(a==='splitch'){
+    var ch0=getCh(P,d.k,d.c);if(!ch0)return;
+    var txt=prompt('Type the units / standards of this chapter, separated by commas:','');
+    if(!txt)return;
+    var us=txt.split(',').map(function(x){return x.trim();}).filter(Boolean);
+    if(!us.length)return;
+    var L2=P.papers[d.k].ch,ix=L2.indexOf(ch0),g=ch0.name;
+    var its=us.map(function(u){return mkCh(g,u.slice(0,100),ch0.status);});
+    if(ch0.status==='done')its.forEach(function(c){c.doneOn=ch0.doneOn;c.revs=[];setDone(P,d.k,c);});
+    L2.splice(ix,1,...its);commit();toast(its.length+' units created');return;
+  }
+  if(a==='tick'){
+    var ch1=getCh(P,d.k,d.c);if(!ch1)return;
+    setDone(P,d.k,ch1);commit();toast('Ticked: '+lblOf(ch1));return;
+  }
+  if(a==='delch'){
+    if(confirm('Remove this chapter?')){P.papers[d.k].ch=P.papers[d.k].ch.filter(function(x){return x.id!==d.c;});commit();}
+    return;
+  }
+  if(a==='saveres'){
+    var r2=ui.res,marks={},any=false,bad=false;
+    allKeys(P).forEach(function(k){
+      var v=r2.marks[k];
+      if(v===undefined||v===null||v==='')return;
+      var n=Number(v);
+      if(isNaN(n)||n<0||n>100){bad=true;return;}
+      marks[k]=n;any=true;
+    });
+    if(bad){toast('Marks must be between 0 and 100');return;}
+    if(!any){toast('Enter marks for at least one paper');return;}
+    var label=aLabel(r2.idx),date=iso(aDate(r2.idx));
+    var exists=P.attempts.some(function(x){return x.label===label&&x.id!==r2.id;});
+    if(exists&&!confirm('A result for '+label+' already exists. Replace it?'))return;
+    P.attempts=P.attempts.filter(function(x){return x.id!==r2.id&&x.label!==label;});
+    P.attempts.push({id:r2.id||uid(),label:label,date:date,marks:marks});
+    ui.res=null;commit();toast('Result saved');return;
+  }
+  if(a==='cancelres'){ui.res=null;render();return;}
+  if(a==='editres'){
+    var at=P.attempts.filter(function(x){return x.id===d.id;})[0];
+    if(at){ui.res={id:at.id,idx:aIdx(parse(at.date)),marks:Object.assign({},at.marks)};render();window.scrollTo(0,0);}
+    return;
+  }
+  if(a==='delres'){
+    if(confirm('Delete this result?')){P.attempts=P.attempts.filter(function(x){return x.id!==d.id;});commit();}
+    return;
+  }
+  if(a==='plannext'){
+    var A=analyse(P);
+    var sorted=P.attempts.slice().sort(function(x,y){return x.date<y.date?-1:(x.date>y.date?1:0);});
+    var last=sorted[sorted.length-1];if(!last)return;
+    var idx=aIdx(parse(last.date))+1;
+    while(diff(today(),aDate(idx))<30)idx++;
+    if(!confirm('Set your next exam to '+aLabel(idx)+' ('+fmt(aDate(idx))+') and restart hour counting from today? Hours needed per paper will be adjusted using your last marks. You can edit everything afterwards.'))return;
+    P.examDate=iso(aDate(idx));P.planStart=iso(today());
+    var X2=activeInfo(P,A);
+    X2.study.forEach(function(k){
+      var lv=lastScore(P,k),f=lv===null?1:clamp(0.45+0.55*(1-Math.min(lv,60)/60),0.45,1);
+      P.papers[k].h=Math.max(10,Math.round(PAPERS[k].h*f));
+    });
+    ui.tab='today';commit();toast('Next attempt planned');return;
+  }
+  if(a==='showall'){ui.showAll=!ui.showAll;render();return;}
+  if(a==='addmock'){
+    var sc=document.getElementById('mk-score').value,mx=Number(document.getElementById('mk-max').value),dt=document.getElementById('mk-date').value;
+    if(!dt||sc===''||!(mx>0)||Number(sc)<0||Number(sc)>mx){toast('Enter a valid score');return;}
+    P.mocks.push({id:uid(),paper:document.getElementById('mk-paper').value,date:dt,score:Number(sc),max:mx});
+    commit();toast('Score added');return;
+  }
+  if(a==='delmock'){P.mocks=P.mocks.filter(function(x){return x.id!==d.id;});commit();return;}
+  if(a==='pdone'){P.sessions.forEach(function(s2){if(s2.id===d.id)s2.pdone=true;});commit();return;}
+  if(a==='delsess'){
+    if(confirm('Delete this session? Its hours will be removed from the plan.')){P.sessions=P.sessions.filter(function(x){return x.id!==d.id;});commit();}
+    return;
+  }
+  if(a==='saveset'){
+    var nm=document.getElementById('st-name').value.trim()||P.name;
+    var h2=Number(document.getElementById('st-hours').value),wg=Number(document.getElementById('st-wg').value),tg=Number(document.getElementById('st-target').value),dt2=document.getElementById('st-date').value;
+    if(!dt2){toast('Choose the exam date');return;}
+    if(!(h2>=1&&h2<=14)||!(wg>=1&&wg<=90)||!(tg>=40&&tg<=100)){toast('Check hours (1-14), weekly goal (1-90) and target (40-100)');return;}
+    var gs=[];
+    document.querySelectorAll('[data-grp]').forEach(function(e){if(e.checked)gs.push(e.dataset.grp);});
+    if(P.level==='foundation')gs=['ALL'];
+    if(!gs.length){toast('Pick at least one group');return;}
+    P.name=nm;P.dailyHours=h2;P.weeklyGoal=wg;P.target=tg;P.examDate=dt2;P.groups=gs;P.rest=Number(document.getElementById('st-rest').value);
+    commit();toast('Settings saved');return;
+  }
+  if(a==='export'){
+    var blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+    var u=URL.createObjectURL(blob),an=document.createElement('a');
+    an.href=u;an.download='studyos-backup-'+iso(today())+'.json';
+    document.body.appendChild(an);an.click();an.remove();
+    setTimeout(function(){URL.revokeObjectURL(u);},1000);toast('Backup downloaded');return;
+  }
+  if(a==='import'){document.getElementById('impf').click();return;}
+}
+
+function startOnb(){
+  var idx=defaultAttemptIdx();
+  ui.onb={name:'',level:'inter',g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};
+}
+
+function chg(k,d,el){
+  var P=cur();
+  if(k==='prof'){S.active=el.value;ui.res=null;ui.modal=null;save();render();return;}
+  if(k==='onattempt'){if(ui.onb){ui.onb.idx=Number(el.value);ui.onb.date=iso(aDate(ui.onb.idx));render();}return;}
+  if(k==='residx'){if(ui.res){ui.res.idx=Number(el.value);render();}return;}
+  if(k==='importfile'){
+    var f=el.files&&el.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(rd.result);
+        if(!o||!Array.isArray(o.profiles))throw new Error('bad');
+        var added=0;
+        o.profiles.forEach(function(p){
+          if(!p||!LEVELS[p.level]||!p.papers||!p.groups)return;
+          p.attempts=p.attempts||[];p.sessions=p.sessions||[];p.mocks=p.mocks||[];
+          if(S.profiles.some(function(x){return x.id===p.id;}))p.id=uid();
+          p.dirty=true;delete p.syncedAt;S.profiles.push(p);added++;
+        });
+        if(!added)throw new Error('none');
+        if(!S.active)S.active=S.profiles[0].id;
+        commit();toast(added+' profile(s) imported');
+      }catch(e){toast('That file is not a valid backup');}
+    };
+    rd.readAsText(f);el.value='';return;
+  }
+  if(!P)return;
+  if(cchg(k,d,el))return;
+  if(k==='hours'){var v=Number(el.value);if(v>=1)P.papers[d.k].h=v;commit();return;}
+  if(k==='focus'){P.papers[d.k].focus=el.checked;commit();return;}
+  if(k==='chstatus'){
+    var ch=getCh(P,d.k,d.c);if(!ch)return;
+    if(el.value==='done')setDone(P,d.k,ch);else ch.status=el.value;
+    commit();if(el.value==='done')toast('Revisions scheduled automatically');return;
+  }
+  if(k==='chconf'){var c2=getCh(P,d.k,d.c);if(c2)c2.conf=Number(el.value);P.dirty=true;save();schedSync();return;}
+  if(k==='smpaper'){readModal();ui.modal.ch='';render();return;}
+}
+
+document.addEventListener('input',function(e){
+  var t=e.target,d=t.dataset||{};
+  if(d.ob&&ui.onb)ui.onb[d.ob]=t.type==='checkbox'?t.checked:t.value;
+  if(d.mk&&ui.res)ui.res.marks[d.mk]=t.value===''?undefined:Number(t.value);
+});
+document.addEventListener('change',function(e){
+  var t=e.target,d=t.dataset||{};
+  if(d.ob&&ui.onb){
+    ui.onb[d.ob]=t.type==='checkbox'?t.checked:t.value;
+    if(d.ob==='level'){ui.onb.g1=true;ui.onb.g2=false;render();}
+    return;
+  }
+  if(d.mk&&ui.res){ui.res.marks[d.mk]=t.value===''?undefined:Number(t.value);return;}
+  if(d.chg)chg(d.chg,d,t);
+});
+document.addEventListener('click',function(e){
+  var t=e.target.closest?e.target.closest('[data-act]'):null;
+  if(t)act(t.dataset.act,t.dataset,t);
+});
+
+initCloud();
+window.__so={cloud:cloud,SYL:SYL,S:function(){return S;},analyse:analyse,activeInfo:activeInfo,planInfo:planInfo,newProfile:newProfile,todayPlan:todayPlan,roadmap:roadmap,makeRevs:makeRevs,render:render,ui:ui,aIdx:aIdx,aLabel:aLabel,cur:cur,save:save};
+render();
+})();
+</script>
+</body>
+</html>
