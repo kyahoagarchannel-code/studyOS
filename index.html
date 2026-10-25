@@ -343,6 +343,9 @@ function makeRevs(conf,from,exam){
 var CKEY='ca_studyos_cloud';
 var cloud={cfg:null,client:null,user:null,state:'off',msg:'',msgKind:'',busy:false,syncMsg:'',links:[],prefs:{},goals:[],progress:[],partner:null,lastProg:{},timer:null};
 try{cloud.cfg=JSON.parse(localStorage.getItem(CKEY)||'null');}catch(e){}
+/* Built-in project (public URL + publishable key only; safe to keep in this file) */
+var BUILTIN_CFG={url:'https://ejzntvunehttxwbytdta.supabase.co',key:'sb_publishable_PRVtE8-6W5itbXhFnJRGGw_wtVl5Lca'};
+if(!cloud.cfg&&BUILTIN_CFG.url)cloud.cfg={url:BUILTIN_CFG.url,key:BUILTIN_CFG.key};
 function cmsg(m,kind){cloud.msg=m;cloud.msgKind=kind||'';}
 function keyRole(k){
   try{var p=k.split('.');if(p.length===3){var j=JSON.parse(atob(p[1].replace(/-/g,'+').replace(/_/g,'/')));return j.role||'';}}catch(e){}
@@ -915,7 +918,7 @@ function readv(id){var e=document.getElementById(id);return e?e.value:'';}
 function guard(p){return p.catch(function(e){toast((e&&e.message)?e.message:'Something went wrong');});}
 function cact(a,d){
   if(a==='cloudsave'){
-    var url=readv('cl-url').trim().replace(/\/+$/,''),key=readv('cl-key').trim(),err=validateCfg(url,key);
+    var url=readv('cl-url').trim().replace(/\/(rest|auth|functions|storage)\/v1.*$/i,'').replace(/\/+$/,''),key=readv('cl-key').trim(),err=validateCfg(url,key);
     if(err){cmsg(err,'bad');render();return true;}
     cloud.cfg={url:url,key:key};
     try{localStorage.setItem(CKEY,JSON.stringify(cloud.cfg));}catch(e){}
