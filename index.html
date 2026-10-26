@@ -1322,7 +1322,7 @@ function viewSettings(c){
   html+='<div class="card"><h3>Share this app</h3><div class="mut">Send the link to friends. Each person signs up with their own email and gets their own plan.</div><div style="margin-top:8px"><button class="btn sec" data-act="shareapp">Share app link</button></div></div>';
   html+=adminCard();
   html+=cloudCard();
-  html+='<div class="mut" style="margin:6px 0">ICAI calendar version '+esc(CAL.version)+' • Syllabus version '+esc(SYLVER)+'</div>';
+  html+='<div class="mut" style="margin:6px 0">App v4 • ICAI calendar '+esc(CAL.version)+' • Syllabus '+esc(SYLVER)+(cloud.user?' • '+(cloud.isAdmin?'You are the admin':'Not admin'):'')+'</div>';
   html+='<div class="card"><h3>Backup</h3><div class="mut">Your data lives only in this browser. Export a backup file regularly and keep it safe. Importing adds profiles; it never overwrites existing ones.</div><div class="row" style="margin-top:10px"><button class="btn sec" data-act="export">Export backup</button><button class="btn sec" data-act="import">Import backup</button><input type="file" id="impf" accept=".json,application/json" style="display:none" data-chg="importfile"></div></div>';
   html+='<div class="card"><h3>Danger zone</h3><button class="btn danger" data-act="delprof">Delete this profile</button></div>';
   return html;
