@@ -365,6 +365,35 @@ function activeInfo(P,A){
   return {groups:groups,study:study,exempt:exempt,tIdx:tIdx};
 }
 
+
+/* ---------- journey: earlier-level marks, route, unlock ---------- */
+var PRIOR={IN1:['FD1'],IN2:['FD2'],IN6:['FD3'],FN1:['IN1'],FN2:['IN6'],FN3:['IN5'],FN4:['IN3'],FN5:['IN3']};
+function histLevel(P){return P.level==='inter'?'foundation':(P.level==='final'?'inter':null);}
+function priorScore(P,k){
+  var src=PRIOR[k],best=null;if(!src||!P.hist)return null;
+  src.forEach(function(sk){var lv=sk.slice(0,2)==='FD'?'foundation':'inter';(P.hist[lv]||[]).forEach(function(a){var m=a.marks&&a.marks[sk];if(typeof m==='number'&&(!best||a.date>=best.d))best={d:a.date,v:m};});});
+  return best?best.v:null;
+}
+function histA(hist,lvl){return analyse({level:lvl,attempts:(hist&&hist[lvl])||[]});}
+function directOK(type,pct){
+  var p=Number(pct);
+  if(type==='prof')return {ok:true,msg:'Qualified CA/CS/CMA: eligible for direct entry.'};
+  if(type==='commerce')return p>=55?{ok:true,msg:'Commerce graduate/PG with '+p+'%: eligible (needs 55%).'}:{ok:false,msg:'Commerce graduates need at least 55%. Foundation route is the way.'};
+  if(type==='other')return p>=60?{ok:true,msg:'Non-commerce graduate/PG with '+p+'%: eligible (needs 60%).'}:{ok:false,msg:'Other graduates need at least 60%. Foundation route is the way.'};
+  return {ok:false,msg:'Direct entry needs a graduation/PG degree (or CS/CMA). Otherwise start with Foundation.'};
+}
+function canStart(o){
+  if(o.level==='foundation')return {ok:true,msg:''};
+  if(o.level==='inter'){
+    if(o.route==='direct'){var d=directOK(o.gtype,o.gpct);return {ok:d.ok,msg:d.msg+(d.ok?' Confirm on icai.org before registering.':'')};}
+    var A=histA(o.hist,'foundation');
+    return A.passed.ALL?{ok:true,msg:'Foundation passed ('+A.passed.ALL.label+'). Intermediate is open.'}:{ok:false,msg:'Intermediate opens after you pass Foundation. Add your Foundation attempt marks below, or choose Direct entry if you are a graduate.'};
+  }
+  var B=histA(o.hist,'inter');
+  if(o.confirmInter||(B.passed.G1&&B.passed.G2))return {ok:true,msg:'Final is open.'};
+  return {ok:false,msg:'Final opens after you pass both Intermediate groups. Add your Intermediate marks below or tick the box.'};
+}
+
 /* ---------- scores, hours, weakness ---------- */
 function lastScore(P,k){
   var best=null;
@@ -372,7 +401,7 @@ function lastScore(P,k){
   P.mocks.forEach(function(m){if(m.paper===k&&m.max>0){var v=m.score/m.max*100;if(!best||m.date>=best.d)best={d:m.date,v:v};}});
   return best?best.v:null;
 }
-function weak(P,k){var v=lastScore(P,k);if(v===null)return 0.3;return clamp((P.target-v)/P.target,0,1);}
+function weak(P,k){var v=lastScore(P,k);if(v===null){var pv=priorScore(P,k);if(pv===null)return 0.3;return clamp((P.target-(pv-5))/P.target,0,1);}return clamp((P.target-v)/P.target,0,1);}
 function hoursDone(P,k){return P.sessions.filter(function(s){return s.paper===k&&s.date>=P.planStart;}).reduce(function(t,s){return t+s.min;},0)/60;}
 function remH(P,k){return Math.max(0,P.papers[k].h-hoursDone(P,k));}
 
@@ -412,6 +441,7 @@ function allocate(total,w){
 function why(P,k,phase){
   var r=[],lv=lastScore(P,k);
   if(lv!==null)r.push('last score '+Math.round(lv)+'/100');
+  else{var pv=priorScore(P,k);if(pv!==null)r.push('earlier level, related subject: '+Math.round(pv)+'/100');}
   if(P.papers[k].focus)r.push('focus paper');
   if(phase==='learn')r.push(Math.round(remH(P,k))+' hrs of syllabus left');
   else r.push(phase==='mock'?'exam is close: practice and fix mistakes':'revision phase');
@@ -714,7 +744,7 @@ function commit(){var P=cur();if(P)P.dirty=true;save();render();schedSync();}
 
 /* ---------- views ---------- */
 function head(P){
-  var opts=S.profiles.map(function(p){return '<option value="'+p.id+'"'+(P&&p.id===P.id?' selected':'')+'>'+esc(p.name)+' \u2022 '+esc(LEVELS[p.level].name)+'</option>';}).join('');
+  var opts=S.profiles.map(function(p){return '<option value="'+p.id+'"'+(P&&p.id===P.id?' selected':'')+'>'+esc(p.name)+' \u2022 '+esc(LEVELS[p.level].name)+(p.archived?' (done)':'')+'</option>';}).join('');
   return '<header><h1>CA StudyOS</h1>'+(S.profiles.length?'<select data-chg="prof">'+opts+'</select>':'')+
     '<button class="btn sec sm" data-act="newprof" title="Add profile">\uff0b</button>'+
     '<button class="btn sec sm" data-act="theme" title="Theme">\u25d0</button></header>'+
@@ -732,7 +762,7 @@ function defaultAttemptIdx(){var i=aIdx(today());while(diff(today(),aDate(i))<30
 
 function viewOnboard(){
   var o=ui.onb;
-  if(!o){var idx=defaultAttemptIdx();o=ui.onb={name:'',level:'inter',g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};onbDate(o);}
+  if(!o){var idx=defaultAttemptIdx();o=ui.onb={name:'',level:'inter',route:'foundation',gtype:'commerce',gpct:'',hist:{},g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};onbDate(o);}
   var L=LEVELS[o.level];
   var lv=Object.keys(LEVELS).map(function(k){return '<label style="color:var(--tx)"><input type="radio" name="lv" data-ob="level" value="'+k+'"'+(o.level===k?' checked':'')+'> '+LEVELS[k].name+'</label>';}).join('');
   var gr='';
@@ -741,10 +771,21 @@ function viewOnboard(){
       '<label style="color:var(--tx)"><input type="checkbox" data-ob="g1"'+(o.g1?' checked':'')+'> Group 1</label>'+
       '<label style="color:var(--tx)"><input type="checkbox" data-ob="g2"'+(o.g2?' checked':'')+'> Group 2</label></div>';
   }
+  var jr='';
+  if(o.level==='inter'){
+    jr='<label>How are you joining Intermediate?</label><div class="opt"><label style="color:var(--tx)"><input type="radio" name="rt" data-ob="route" value="foundation"'+(o.route!=='direct'?' checked':'')+'> I passed Foundation</label><label style="color:var(--tx)"><input type="radio" name="rt" data-ob="route" value="direct"'+(o.route==='direct'?' checked':'')+'> Direct entry (graduate)</label></div>';
+    if(o.route==='direct')jr+='<label>Your graduation</label><select data-ob="gtype"><option value="commerce"'+(o.gtype==='commerce'?' selected':'')+'>Commerce graduate / PG</option><option value="other"'+(o.gtype==='other'?' selected':'')+'>Other graduate / PG</option><option value="prof"'+(o.gtype==='prof'?' selected':'')+'>CS / CMA qualified</option><option value="none"'+(o.gtype==='none'?' selected':'')+'>Not a graduate</option></select><input type="number" min="0" max="100" data-ob="gpct" placeholder="Graduation marks %" value="'+esc(o.gpct||'')+'" style="margin-top:6px">';
+    else jr+=histEditor('onb','foundation');
+  }
+  if(o.level==='final'){
+    jr='<label style="color:var(--tx)"><input type="checkbox" data-ob="confirmInter"'+(o.confirmInter?' checked':'')+'> I have passed both groups of Intermediate</label>'+histEditor('onb','inter');
+  }
+  var gate=canStart(o);
+  if(o.level!=='foundation')jr+='<div class="'+(gate.ok?'mut':'warnbox')+'" style="margin-top:8px">'+esc(gate.msg)+'</div>';
   var rest='<option value="-1"'+(o.rest==-1?' selected':'')+'>No rest day</option>'+DAYN.map(function(d,i){return '<option value="'+i+'"'+(o.rest==i?' selected':'')+'>'+d+'</option>';}).join('');
   return '<div class="card"><h3>Create your plan</h3><div class="mut">Everything is saved only in this browser on this device. Your partner can open the same link on her own phone or laptop and make her own profile.</div>'+
     '<label>Your name</label><input type="text" data-ob="name" value="'+esc(o.name)+'" placeholder="Name">'+
-    '<label>Level</label><div class="opt" data-lv>'+lv+'</div>'+gr+
+    '<label>Level</label><div class="opt" data-lv>'+lv+'</div>'+jr+gr+
     '<label>Exam attempt you are preparing for</label><select data-chg="onattempt">'+nextAttemptOptions(o.idx)+'</select>'+
     '<label>Exam start date</label><input type="date" data-ob="date" value="'+esc(o.date)+'">'+
     '<div class="mut" style="margin-top:4px">'+(o.auto&&o.hasIcai?'Set from the ICAI schedule (first paper of your group). It will update by itself if ICAI changes it.':(o.auto?'ICAI has not announced this attempt yet, so this is an estimate. The app will fix it by itself when the date is published.':'You chose this date yourself, so it will not change automatically.'))+'</div>'+
@@ -767,6 +808,58 @@ function partnerGlance(){
     if(parts.length)h+='<div class="row sp" style="margin-top:4px"><span>'+esc(nm)+'</span><span class="mut">'+parts.join(' \u2022 ')+'</span></div>';
   });
   return h?'<div class="card"><h3>Your partner</h3>'+h+'<button class="btn sec sm" style="margin-top:8px" data-act="tab" data-t="partner">Open Partner</button></div>':'';
+}
+
+function histOf(where){
+  if(where==='onb'){var o=ui.onb;o.hist=o.hist||{};return o.hist;}
+  var P=cur();P.hist=P.hist||{};return P.hist;
+}
+function histEditor(where,lvl){
+  var h=histOf(where),arr=h[lvl]=h[lvl]||[],keys=[];
+  Object.keys(LEVELS[lvl].groups).forEach(function(g){keys=keys.concat(LEVELS[lvl].groups[g].p);});
+  if(!ui.hf||ui.hf.lvl!==lvl)ui.hf={lvl:lvl,idx:aIdx(today())-1,marks:{}};
+  var base=aIdx(today()),opts='';
+  for(var i=base-12;i<=base;i++)opts+='<option value="'+i+'"'+(i===ui.hf.idx?' selected':'')+'>'+aLabel(i)+'</option>';
+  var A=histA(h,lvl),html='<label>'+esc(LEVELS[lvl].name)+' attempts you already gave (add every attempt, passed or failed)</label>';
+  if(!arr.length)html+='<div class="mut">None added yet.</div>';
+  A.rows.forEach(function(row){
+    var a=row.a;
+    html+='<div style="border-top:1px solid var(--bd);margin-top:6px;padding-top:6px"><div class="row sp"><b>'+esc(a.label)+'</b><button class="btn danger sm" data-act="hdel" data-where="'+where+'" data-id="'+a.id+'">Delete</button></div>';
+    html+='<div class="mut">'+keys.map(function(k){return plab(k)+': '+(a.marks[k]===undefined?'-':a.marks[k]);}).join(' • ')+'</div>';
+    row.groups.forEach(function(g){html+='<div>'+groupVerdict(g)+'</div>';});
+    html+='</div>';
+  });
+  html+='<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px"><div class="mut">Add an attempt</div><select data-chg="hfidx">'+opts+'</select><div class="grid">';
+  keys.forEach(function(k){html+='<div><div class="mut">'+esc(pfull(k))+'</div><input type="number" min="0" max="100" step="0.5" data-hm="'+k+'" value="'+(ui.hf.marks[k]===undefined?'':ui.hf.marks[k])+'"></div>';});
+  html+='</div><div style="margin-top:8px"><button class="btn sec" data-act="hadd" data-where="'+where+'" data-lvl="'+lvl+'">Add this attempt</button></div></div>';
+  return html;
+}
+function nextLevel(l){return l==='foundation'?'inter':(l==='inter'?'final':null);}
+function levelDone(P,A){
+  if(P.level==='foundation')return !!A.passed.ALL;
+  if(P.level==='inter')return !!(A.passed.G1&&A.passed.G2);
+  return !!(A.passed.G1&&A.passed.G2);
+}
+function levelUpCard(P,A){
+  if(!levelDone(P,A))return '';
+  var nx=nextLevel(P.level);
+  if(!nx)return '<div class="card"><h3>CA Final cleared</h3><div>Congratulations. You have passed both groups of CA Final.</div></div>';
+  return '<div class="card"><h3>'+esc(LEVELS[P.level].name)+' passed</h3><div>'+esc(LEVELS[nx].name)+' is now open. Your marks and settings carry over, so you do not enter anything again.</div><div style="margin-top:8px"><button class="btn" data-act="levelup">Start '+esc(LEVELS[nx].name)+'</button></div></div>';
+}
+function journeyCard(P,A){
+  var lv=P.level,both=!!(A.passed.G1&&A.passed.G2),hA=histA(P.hist,'foundation');
+  var f=lv==='foundation'?'You are here':(P.route==='direct'?'Skipped (direct entry)':(hA.passed.ALL?'Passed '+hA.passed.ALL.label:(lv==='final'?'Passed':'Not recorded')));
+  var i=lv==='inter'?'You are here'+(both?' (both groups passed)':''):(lv==='final'?'Passed':(A.passed.ALL?'Open':'Locked until Foundation is passed'));
+  var fn=lv==='final'?'You are here':(lv==='inter'&&both?'Open':'Locked until both Intermediate groups are passed');
+  var h='<div class="card"><h3>My CA journey</h3><div class="row sp"><span>Foundation</span><span class="mut">'+esc(f)+'</span></div><div class="row sp"><span>Intermediate</span><span class="mut">'+esc(i)+'</span></div><div class="row sp"><span>Final</span><span class="mut">'+esc(fn)+'</span></div>';
+  if(lv==='inter'&&P.route==='direct'){
+    var g=P.grad||{type:'commerce',pct:''},dv=directOK(g.type,g.pct);
+    h+='<label>Graduation (for direct entry)</label><select id="gr-type"><option value="commerce"'+(g.type==='commerce'?' selected':'')+'>Commerce graduate / PG</option><option value="other"'+(g.type==='other'?' selected':'')+'>Other graduate / PG</option><option value="prof"'+(g.type==='prof'?' selected':'')+'>CS / CMA qualified</option></select><input type="number" id="gr-pct" min="0" max="100" placeholder="Marks %" value="'+esc(g.pct)+'" style="margin-top:6px"><div class="mut" style="margin-top:4px">'+esc(dv.msg)+'</div><div style="margin-top:6px"><button class="btn sec sm" data-act="gradsave">Save</button></div>';
+  }
+  var hl=histLevel(P);
+  if(hl&&P.route!=='direct'){h+='<div class="mut" style="margin-top:8px">Earlier-level marks help the plan: related subjects you scored low in get more hours.</div>'+histEditor('prof',hl);}
+  h+='<div class="mut" style="margin-top:10px">Not on this level? Tap ＋ at the top and choose your level. Intermediate opens only after Foundation is passed, or by direct entry for graduates. Final opens after both Intermediate groups.</div></div>';
+  return h;
 }
 function sylBanner(P){
   if(!(P.sylVer<SYLVER))return '';
@@ -836,7 +929,7 @@ function viewToday(c){
     html+='<p style="margin:10px 0 0">Focus on revision, past papers and your weak chapters. Do not start big new topics now.</p>';
   }
   html+='</div>';
-  html+=tipsCard()+sylBanner(P)+partnerGlance()+icaiCard(P,X)+timerCard(P,X);
+  html+=levelUpCard(P,c.A)+tipsCard()+sylBanner(P)+partnerGlance()+icaiCard(P,X)+timerCard(P,X);
   if(I.phase!=='over'){
     html+='<h2>Today\u2019s plan</h2><div class="card">';
     if(T.rest)html+='<div>Today is your rest day. Optional: 20 minutes of light revision.</div>';
@@ -1235,8 +1328,10 @@ function cact(a,d){
     guard(cloud.client.from('share_prefs').upsert(row2,{onConflict:'link_id,owner'}).then(function(r){if(r.error)throw r.error;return pushSummary();}).then(function(){toast(on?'Sharing on':'Sharing off');return refreshPartner();}));
     return true;
   }
-  if(a==='calcheck'){
-    guard(cloud.client.functions.invoke('icai-check',{body:{}}).then(async function(r){
+  if(a==='calcheck'||a==='calpaste'){
+    var cbody={};
+    if(a==='calpaste'){var tx=readv('cal-text').trim();if(tx.length<30){toast('Paste the ICAI notice text first');return true;}cbody={text:tx};}
+    guard(cloud.client.functions.invoke('icai-check',{body:cbody}).then(async function(r){
       if(r.error){
         var msg='The ICAI check function is not reachable. Check it is deployed with the name icai-check.';
         try{if(r.error.context&&r.error.context.json){var jj=await r.error.context.json();if(jj&&jj.error)msg=jj.error;}}catch(e){}
@@ -1288,7 +1383,7 @@ function cchg(k,d,el){
 
 function adminCard(){
   if(!cloud.isAdmin)return '';
-  var h='<div class="card"><h3>ICAI dates (admin)</h3><div class="mut">The app can look up ICAI’s announced dates. Nothing changes for anyone until you approve.</div><div style="margin-top:8px"><button class="btn sec" data-act="calcheck">Check ICAI now</button></div>';
+  var h='<div class="card"><h3>ICAI dates (admin)</h3><div class="mut">The app can look up ICAI’s announced dates. Nothing changes for anyone until you approve.</div><div style="margin-top:8px"><button class="btn sec" data-act="calcheck">Check ICAI now</button></div><label>Or paste the ICAI exam notice text (use this if the check says quota used up)</label><textarea id="cal-text" maxlength="12000" style="min-height:90px" placeholder="Paste the text of the exam schedule notice from icai.org"></textarea><div style="margin-top:6px"><button class="btn sec sm" data-act="calpaste">Read dates from this text</button></div>';
   var pd=cloud.pending||[];
   if(!pd.length)h+='<div class="mut" style="margin-top:8px">No dates waiting for approval.</div>';
   pd.forEach(function(p){
@@ -1310,7 +1405,7 @@ function adminCard(){
 function viewSettings(c){
   var P=c.P,L=LEVELS[P.level],html='<div class="card"><h3>Profile settings</h3>';
   html+='<label>Name</label><input type="text" id="st-name" value="'+esc(P.name)+'">';
-  html+='<div class="mut" style="margin-top:6px">Level: '+esc(L.name)+' (to start the next level, tap \uff0b at the top to add a new profile; this one stays as your history)</div>';
+  html+='<div class="mut" style="margin-top:6px">Level: '+esc(L.name)+' (when you pass it, the next level opens by itself on the Today tab)</div>';
   if(P.level!=='foundation'){
     html+='<label>Groups you are preparing for</label><div class="opt">'+Object.keys(L.groups).map(function(g){return '<label style="color:var(--tx)"><input type="checkbox" data-grp="'+g+'"'+(P.groups.indexOf(g)>=0?' checked':'')+'> '+L.groups[g].n+'</label>';}).join('')+'</div>';
   }
@@ -1322,11 +1417,12 @@ function viewSettings(c){
   html+='<label>Target marks per paper (used to find weak papers)</label><input type="number" id="st-target" min="40" max="100" step="1" value="'+P.target+'">';
   html+='<label>Weekly rest day</label><select id="st-rest"><option value="-1"'+(P.rest<0?' selected':'')+'>No rest day</option>'+DAYN.map(function(d,i){return '<option value="'+i+'"'+(P.rest===i?' selected':'')+'>'+d+'</option>';}).join('')+'</select>';
   html+='<div style="margin-top:12px"><button class="btn" data-act="saveset">Save settings</button></div></div>';
+  html+=journeyCard(P,c.A);
   html+='<div class="card"><h3>Daily reminder</h3><div class="mut">Adds a repeating study reminder to your phone calendar. Open the downloaded file and choose your calendar app.</div><div class="row" style="margin-top:8px"><input type="time" id="rm-time" value="06:30" style="width:auto"><button class="btn sec" data-act="icsdl">Download reminder</button></div></div>';
   html+='<div class="card"><h3>Share this app</h3><div class="mut">Send the link to friends. Each person signs up with their own email and gets their own plan.</div><div style="margin-top:8px"><button class="btn sec" data-act="shareapp">Share app link</button></div></div>';
   html+=adminCard();
   html+=cloudCard();
-  html+='<div class="mut" style="margin:6px 0">App v4 • ICAI calendar '+esc(CAL.version)+' • Syllabus '+esc(SYLVER)+(cloud.user?' • '+(cloud.isAdmin?'You are the admin':'Not admin'):'')+'</div>';
+  html+='<div class="mut" style="margin:6px 0">App v5 • ICAI calendar '+esc(CAL.version)+' • Syllabus '+esc(SYLVER)+(cloud.user?' • '+(cloud.isAdmin?'You are the admin':'Not admin'):'')+'</div>';
   html+='<div class="card"><h3>Backup</h3><div class="mut">Your data lives only in this browser. Export a backup file regularly and keep it safe. Importing adds profiles; it never overwrites existing ones.</div><div class="row" style="margin-top:10px"><button class="btn sec" data-act="export">Export backup</button><button class="btn sec" data-act="import">Import backup</button><input type="file" id="impf" accept=".json,application/json" style="display:none" data-chg="importfile"></div></div>';
   html+='<div class="card"><h3>Danger zone</h3><button class="btn danger" data-act="delprof">Delete this profile</button></div>';
   return html;
@@ -1418,15 +1514,43 @@ function act(a,d){
   if(a==='theme'){var t=theme()==='dark'?'light':'dark';try{localStorage.setItem(TKEY,t);}catch(e){}render();return;}
   if(a==='newprof'){startOnb();render();window.scrollTo(0,0);return;}
   if(a==='cancelonb'){ui.onb=null;render();return;}
+  if(a==='hadd'){
+    var hh=histOf(d.where),lv=d.lvl,mk=ui.hf?ui.hf.marks:{},any=false,mm={};
+    Object.keys(mk).forEach(function(k){if(typeof mk[k]==='number'&&!isNaN(mk[k])){mm[k]=mk[k];any=true;}});
+    if(!any){toast('Enter at least one paper mark');return;}
+    var ix=ui.hf.idx;
+    hh[lv]=(hh[lv]||[]).filter(function(x){return x.label!==aLabel(ix);});
+    hh[lv].push({id:uid(),label:aLabel(ix),date:iso(aDate(ix)),marks:mm});
+    ui.hf.marks={};
+    if(d.where==='onb')render();else commit();
+    return;
+  }
+  if(a==='hdel'){
+    var hd=histOf(d.where);Object.keys(hd).forEach(function(l){hd[l]=hd[l].filter(function(x){return x.id!==d.id;});});
+    if(d.where==='onb')render();else commit();
+    return;
+  }
+  if(a==='gradsave'){var P0=cur();if(P0){P0.grad={type:readv('gr-type'),pct:readv('gr-pct')};commit();toast('Saved');}return;}
+  if(a==='levelup'){
+    var P1=cur();if(!P1)return;var nx=nextLevel(P1.level);if(!nx)return;
+    var hist=JSON.parse(JSON.stringify(P1.hist||{}));hist[P1.level]=JSON.parse(JSON.stringify(P1.attempts||[]));
+    var idx2=defaultAttemptIdx();
+    ui.onb={name:P1.name,level:nx,route:nx==='inter'?'foundation':'passed',gtype:'commerce',gpct:'',hist:hist,confirmInter:nx==='final',fromId:P1.id,g1:true,g2:false,idx:idx2,date:iso(aDate(idx2)),hours:P1.dailyHours,rest:P1.rest};
+    onbDate(ui.onb);ui.hf=null;render();window.scrollTo(0,0);return;
+  }
   if(a==='createprof'){
     var o=ui.onb;if(!o)return;
     var groups=o.level==='foundation'?['ALL']:[];
     if(o.level!=='foundation'){if(o.g1)groups.push('G1');if(o.g2)groups.push('G2');}
     if(!groups.length){toast('Pick at least one group');return;}
     if(!o.date){toast('Choose the exam date');return;}
+    var gt=canStart(o);if(!gt.ok){toast(gt.msg);return;}
     var hrs=Number(o.hours);
     if(!(hrs>=1&&hrs<=14)){toast('Daily hours must be between 1 and 14');return;}
     var np=newProfile({name:String(o.name||'').trim(),level:o.level,groups:groups,examDate:o.date,dailyHours:hrs,rest:Number(o.rest),dateAuto:!!o.auto});
+    np.hist=o.hist||{};np.route=o.level==='inter'?(o.route==='direct'?'direct':'foundation'):(o.level==='final'?'passed':'start');
+    if(o.level==='inter'&&o.route==='direct')np.grad={type:o.gtype,pct:o.gpct};
+    if(o.fromId){var op=S.profiles.filter(function(x){return x.id===o.fromId;})[0];if(op){op.archived=true;op.dirty=true;}}
     S.profiles.push(np);S.active=np.id;ui.onb=null;ui.tab='today';ui.res=null;commit();toast('Plan created');return;
   }
   if(!P)return;
@@ -1589,10 +1713,11 @@ function act(a,d){
 
 function startOnb(){
   var idx=defaultAttemptIdx();
-  ui.onb={name:'',level:'inter',g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};
+  ui.onb={name:'',level:'inter',route:'foundation',gtype:'commerce',gpct:'',hist:{},g1:true,g2:false,idx:idx,date:iso(aDate(idx)),hours:6,rest:0};
 }
 
 function chg(k,d,el){
+  if(k==='hfidx'){if(ui.hf)ui.hf.idx=Number(el.value);return;}
   var P=cur();
   if(k==='prof'){S.active=el.value;ui.res=null;ui.modal=null;save();render();return;}
   if(k==='aimode'){var a9=ui.ai;a9.q=readv('ai-q');a9.mat=readv('ai-mat')||a9.mat;var cx9=document.getElementById('ai-ctx');if(cx9)a9.ctx=cx9.checked;a9.mode=el.value;render();return;}
@@ -1637,13 +1762,15 @@ document.addEventListener('input',function(e){
   var t=e.target,d=t.dataset||{};
   if(d.ob&&ui.onb)ui.onb[d.ob]=t.type==='checkbox'?t.checked:t.value;
   if(d.mk&&ui.res)ui.res.marks[d.mk]=t.value===''?undefined:Number(t.value);
+  if(d.hm&&ui.hf)ui.hf.marks[d.hm]=t.value===''?undefined:Number(t.value);
 });
 document.addEventListener('change',function(e){
   var t=e.target,d=t.dataset||{};
   if(d.ob&&ui.onb){
     ui.onb[d.ob]=t.type==='checkbox'?t.checked:t.value;
-    if(d.ob==='level'){ui.onb.g1=true;ui.onb.g2=false;onbDate(ui.onb);render();}
+    if(d.ob==='level'){ui.onb.route=ui.onb.level==='inter'?'foundation':'passed';ui.hf=null;ui.onb.g1=true;ui.onb.g2=false;onbDate(ui.onb);render();}
     else if(d.ob==='g1'||d.ob==='g2'){if(!ui.onb.g1&&!ui.onb.g2){ui.onb[d.ob]=true;}onbDate(ui.onb);render();}
+    else if(d.ob==='route'||d.ob==='gtype'||d.ob==='confirmInter'){render();}
     else if(d.ob==='date'){ui.onb.auto=false;ui.onb.hasIcai=false;render();}
     return;
   }
@@ -1658,7 +1785,7 @@ document.addEventListener('click',function(e){
 initCloud();
 setInterval(function(){try{var ae=document.activeElement,tg=ae&&ae.tagName;if(ui.tab==='partner'&&cloud.user&&!document.hidden&&!ui.modal&&!/INPUT|TEXTAREA|SELECT/.test(tg||''))refreshPartner();}catch(e){}},60000);
 setInterval(function(){var e=document.getElementById('tm-el'),t=tmGet();if(e&&t)e.textContent=tmText(t);},500);
-window.__so={CAL:function(){return CAL;},SYLV:function(){return SYLVER;},icaiStart:icaiStart,applyRemote:applyRemote,applySyl:applySyl,sylDiff:sylDiff,weakChapters:weakChapters,weekText:weekText,icsText:icsText,streakDays:streakDays,normP:normP,onbDate:onbDate,tmSet:tmSet,cloud:cloud,SYL:SYL,S:function(){return S;},analyse:analyse,activeInfo:activeInfo,planInfo:planInfo,newProfile:newProfile,todayPlan:todayPlan,roadmap:roadmap,makeRevs:makeRevs,render:render,ui:ui,aIdx:aIdx,aLabel:aLabel,cur:cur,save:save};
+window.__so={priorScore:priorScore,weak:weak,canStart:canStart,directOK:directOK,histA:histA,CAL:function(){return CAL;},SYLV:function(){return SYLVER;},icaiStart:icaiStart,applyRemote:applyRemote,applySyl:applySyl,sylDiff:sylDiff,weakChapters:weakChapters,weekText:weekText,icsText:icsText,streakDays:streakDays,normP:normP,onbDate:onbDate,tmSet:tmSet,cloud:cloud,SYL:SYL,S:function(){return S;},analyse:analyse,activeInfo:activeInfo,planInfo:planInfo,newProfile:newProfile,todayPlan:todayPlan,roadmap:roadmap,makeRevs:makeRevs,render:render,ui:ui,aIdx:aIdx,aLabel:aLabel,cur:cur,save:save};
 render();
 })();
 
