@@ -1236,8 +1236,12 @@ function cact(a,d){
     return true;
   }
   if(a==='calcheck'){
-    guard(cloud.client.functions.invoke('icai-check',{body:{}}).then(function(r){
-      if(r.error)throw new Error('The ICAI check function is not set up yet (see SETUP guide)');
+    guard(cloud.client.functions.invoke('icai-check',{body:{}}).then(async function(r){
+      if(r.error){
+        var msg='The ICAI check function is not reachable. Check it is deployed with the name icai-check.';
+        try{if(r.error.context&&r.error.context.json){var jj=await r.error.context.json();if(jj&&jj.error)msg=jj.error;}}catch(e){}
+        throw new Error(msg);
+      }
       var m=(r.data&&(r.data.message||r.data.error))||'Done';toast(m);return refreshPartner();
     }));return true;
   }
